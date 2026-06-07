@@ -1,7 +1,7 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/base.js アセット管理、エンティティベース、パーティクル
+ * entities/base.js - アセット管理、エンティティベース、パーティクル、スコア表示
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
@@ -35,19 +35,17 @@ class Entity {
 
         // 🛑 【敵専用ロジック】トリッキーな動きをする敵の場合
         if (isEnemy) {
-            // 1. 下方向に完全に突き抜けたら消滅（既存の仕様を維持）
+            // 1. 下方向に完全に突き抜けたら消滅
             if (this.y > GAME_CONFIG.HEIGHT) {
                 return true;
             }
 
-            // 2. 画面外から戻ってくる動きを許容しつつ、
-            //    絶対に戻ってこれない宇宙の彼方（3000px）に暴走した場合は強制排除
+            // 2. 画面外から戻ってくる動きを許容しつつ、絶対に戻ってこれない宇宙の彼方（3000px）に暴走した場合は強制排除
             const ABSOLUTE_LIMIT = 3000;
             if (this.x < -ABSOLUTE_LIMIT || this.x > ABSOLUTE_LIMIT || this.y < -ABSOLUTE_LIMIT) {
                 return true;
             }
 
-            // 左右や上方向の通常のはみ出しは戻ってくる可能性があるので、ここではまだ false（画面内扱い）にする
             return false;
         }
 
@@ -61,188 +59,24 @@ class Entity {
     }
 }
 
-
-// ==========================================
-// 1. 敵キャラ、ボスキャラの基底（ベース）クラス
-// ==========================================
-
-class Enemy extends Entity {
-    constructor(game, x, y, bulletType, hp = 1) {
-        super(x, y, 32, 32);
-        this.bulletType = bulletType || 'aim';
-        this.speed = 2;
-        this.hp = hp;
-        this.maxHp = hp;
-        this.shootTimer = Math.random() * 60;
-        this.baseShootInterval = 120; 
-        this.fireRateMultiplier = 1.0;
-        
-        this.image = game.assets.get(this.imageName);
-        // すでに倉庫に画像があるかどうかで判定する
-        this.isLoaded = !!this.image; 
-        this.loadError = !this.isLoaded; // 倉庫になければエラー扱い
-        if (this.loadError) {
-            console.warn(`[Asset Error] Failed to find: ${this.imageName}`);
-        }
-    }
-    get imageName() { return "enemy_straight.webp"; }
-
-    /** 敵の移動と攻撃を管理する */
-    update(game) {
-        this.y += this.speed;
-        if (this.isOutOfBounds(50, true)) { this.active = false; return; }
-        if (this.active) {
-            const isInFiringRange = this.y > 20 && this.y < 475;
-            if (isInFiringRange) {
-                this.shootTimer++;
-                const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-                if (this.shootTimer >= currentInterval) {
-                    this.shoot(game);
-                    this.shootTimer = 0;
-                }
-            }
-        }
-    }
-
-    /** 指定の弾種で弾を発射する */
-    shoot(game) {
-        // 発射の基準点を「画像の中心」に
-        const bx = this.x + this.width / 2;
-        const by = this.y + this.height / 2; 
-
-        // プレイヤーへの角度計算（ターゲットも中心を狙う）
-        const targetX = game.player.x + game.player.width / 2;
-        const targetY = game.player.y + game.player.height / 2;
-        const angle = Math.atan2(targetY - by, targetX - bx);
-
-        // 弾を生成する補助関数
-        const spawn = (vx, vy) => game.entities.push(new EnemyBullet(bx, by, vx, vy));
-
-        switch (this.bulletType) {
-            case 'eight-way':
-                for (let i = 0; i < 8; i++) {
-                    const a = (Math.PI * 2 / 8) * i;
-                    spawn(Math.cos(a) * 3, Math.sin(a) * 3); // 中心から全方位に均等に飛ばす
-                }
-                break;
-                
-            case 'straight':
-                spawn(0, 4);
-                break;
-                
-            case 'triple':
-                [-0.3, 0, 0.3].forEach(off => 
-                    spawn(Math.cos(angle + off) * 3, Math.sin(angle + off) * 3)
-                );
-                break;
-                
-            case 'aim':
-            default:
-                spawn(Math.cos(angle) * 4, Math.sin(angle) * 4);
-                break;
-        }
-    }
-
-    /** ダメージを受けたときの状態を更新する */
-    takeDamage(amount) {
-        this.hp -= amount;
-        if (this.hp <= 0) {
-            this.active = false;
-            return true;
-        }
-        return false;
-    }
-
-    /** 敵を描画する */
-    draw(ctx, isInvincibleCheat = false) {
-        ctx.save();
-
-        // 当たり判定スキップと完全に同じ条件（画面外、または上部のHUDエリア内）
-        if (
-            this.y + this.height < GAME_CONFIG.UI_HEADER_HEIGHT ||
-            this.y >= GAME_CONFIG.HEIGHT ||
-            this.x + this.width <= 0 ||
-            this.x >= GAME_CONFIG.WIDTH
-        ) {
-            if (Math.floor(Date.now() / 33) % 2 === 0) {
-                ctx.globalAlpha = 0.15;
-            } else {
-                ctx.globalAlpha = 0.60;
-            }
-        }
-
-        if (this.isLoaded && !this.loadError) {
-            // 1. 画像が正常に読み込めている場合
-            ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-        } else {
-            // 2. 読み込み中、またはエラー（404等）の場合
-            ctx.fillStyle = this.loadError ? '#F00' : '#444';
-            ctx.strokeStyle = '#FFF';
-            ctx.lineWidth = 2;
-            
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.strokeRect(this.x, this.y, this.width, this.height);
-
-            if (this.loadError) {
-                ctx.beginPath();
-                ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x + this.width, this.y + this.height);
-                ctx.moveTo(this.x + this.width, this.y);
-                ctx.lineTo(this.x, this.y + this.height);
-                ctx.stroke();
-            }
-        }
-
-        // チート用のヒットボックス（ライム色の枠）描画
-        if (isInvincibleCheat) {
-            ctx.strokeStyle = 'lime';
-            const hw = this.hitWidth || this.width;
-            const hh = this.hitHeight || this.height;
-            ctx.strokeRect(
-                this.x + (this.width - hw) / 2, 
-                this.y + (this.height - hh) / 2, 
-                hw, hh
-            );
-        }
-
-        ctx.restore();
-    }
-
-    // 通常演出（特殊演出は各クラスで上書き）
-    onDie(game, soundoff = false) {
-        const centerX = this.x + this.width / 2;
-        const centerY = this.y + this.height / 2;
-        game.collisions.createExplosion(centerX, centerY, this, soundoff);
-    }
-}
-
-
-class BossEnemy extends Enemy {
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        const bulletType = "aim";
-        super(game, x, y, bulletType, hp);
-        this.timeLimit = timeLimit;
-        this.timeMultiplier = timeMultiplier;
-    }
-}
-
 /**
  * 敵の弾クラス
  */
 class EnemyBullet extends Entity {
-
     constructor(x, y, vx, vy) {
         super(x, y, 4, 4); // 判定は 4x4
         this.vx = vx;
         this.vy = vy;
         this.renderRadius = 3; // 見た目の半径は 3（直径6）
     }
+
     /** 敵弾の移動更新と画面外判定 */
     update() {
         this.x += this.vx;
         this.y += this.vy;
         if (this.isOutOfBounds(50)) this.active = false;
     }
+
     /** 敵弾を描画する */
     draw(ctx) {
         ctx.fillStyle = '#F0F';
@@ -272,7 +106,9 @@ class Particle extends Entity {
         this.x += this.vx;
         this.y += this.vy;
         if (this.type === 'player') {
-            this.vx *= 0.96; this.vy *= 0.96; this.size *= 0.98;
+            this.vx *= 0.96; 
+            this.vy *= 0.96; 
+            this.size *= 0.98;
         }
         this.life--;
         if (this.life <= 0) this.active = false;
@@ -316,20 +152,14 @@ class ScoreText {
         this.opacity = 1.0;
         this.isDead = false;
 
-        // --- 【大改修】データの整形とカンマ区切りの一元化 ---
-        // scoreが配列ならそのまま使い、数値や単一文字列なら配列に包む
         const rawLines = Array.isArray(score) ? score : [score];
-        
-        // 配列の中身を走査し、純粋な数値（number）があればここでカンマ区切り文字列に変換する
         this.lines = rawLines.map(line => 
             (typeof line === 'number') ? line.toLocaleString() : String(line)
         );
 
-        // 判定用の平滑化文字列を作成
         const flatScore = this.lines.join(" ");
         const numScore = typeof score === 'number' ? score : 0;
 
-        // --- 表示タイプの特定 ---
         let displayType = "NORMAL";
         if (flatScore.includes("BONUS")) {
             displayType = "BONUS";
@@ -341,31 +171,31 @@ class ScoreText {
 
         switch (displayType) {
             case "BONUS":
-                this.color = "#0FF";     // シアン
-                this.fontSize = 16;      // 最大
-                this.maxLife = 120;      // 最長
+                this.color = "#0FF";
+                this.fontSize = 16;
+                this.maxLife = 120;
                 this.speed = 0.8;
                 this.isBonus = true;
                 break;
 
             case "BOSS_KILLED":
-                this.color = "#ff0";     // ゴールド
+                this.color = "#ff0";
                 this.fontSize = 16;
                 this.maxLife = 120;
-                this.speed = 0.8;        // スッと勢いよく飛び出す
+                this.speed = 0.8;
                 this.isBonus = false;
                 break;
 
             case "MEDIUM_KILLED":
-                this.color = "#f0f";     // マゼンタ
+                this.color = "#f0f";
                 this.fontSize = 11;
                 this.maxLife = 60;
-                this.speed = 0.5;        // 標準的な速度
+                this.speed = 0.5;
                 this.isBonus = false;
                 break;
 
             default: // NORMAL
-                this.color = color;      // 指定色
+                this.color = color;
                 this.fontSize = 8;
                 this.maxLife = 60;
                 this.speed = 0.5;
@@ -396,11 +226,9 @@ class ScoreText {
         ctx.lineWidth = (this.isBig || this.isBonus) ? 4 : 2;
         ctx.fillStyle = this.color;
 
-        // --- 複数行描画の処理（すでにコンストラクタで整形済みなのでシンプルに） ---
         const lineHeight = this.fontSize * 1.4;
 
         this.lines.forEach((text, index) => {
-            // 中心からの相対Y座標を計算
             const drawY = this.y + (index - (this.lines.length - 1) / 2) * lineHeight;
             ctx.strokeText(text, this.x, drawY);
             ctx.fillText(text, this.x, drawY);
@@ -415,58 +243,65 @@ class ScoreText {
  */
 class AssetManager {
     constructor(basePath) {
-        this.basePath = basePath;
-        this.imageCache = {};      // ロード完了した Image オブジェクトのキャッシュ
-        this.loadingPromises = {}; // 二重ロードを防ぐための、現在ロード中のPromise
+        this.basePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+        this.stagePath = null;
+        this.imageCache = {};
+        this.loadingPromises = {};
     }
 
-    /**
-     * 画像をオンデマンドで取得・ロードする
-     * @param {string} key 画像のファイル名 (例: 'enemy_assault.webp')
-     * @returns {HTMLImageElement|null} ロード済みの画像。まだロード中ならnullか仮の画像を返す
-     */
     get(key) {
         if (!key) return null;
 
-        // 1. すでにキャッシュにある場合は、それを即座に返す（毎フレームの描画処理用）
         if (this.imageCache[key]) {
             return this.imageCache[key];
         }
-        if (!key || key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
-            return Promise.resolve(null);
+        if (key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
+            return null;
         }
-        // 2. まだロードが始まっていない初見の画像の場合、非同期ロードを裏で開始する
+        
         if (!this.loadingPromises[key]) {
-            const url = `${this.basePath}${key}`;
-
             this.loadingPromises[key] = new Promise(resolve => {
                 const img = new Image();
                 img.crossOrigin = "anonymous";
+
                 img.onload = () => {
-                    this.imageCache[key] = img; // キャッシュに格納
-                    console.log(`[Assets]  Ready: ${key}`);
+                    this.imageCache[key] = img;
+                    console.log(`[Assets] Ready: ${key} (from ${img.src})`);
                     resolve(img);
                 };
-                img.onerror = () => {
-                    console.error(`[Assets] ❌ Load failed: ${url}`);
-                    // エラー時は二重ロード防止を解除し、次回リトライ可能にする
-                    this.loadingPromises[key] = null;
-                    resolve(null);
-                };
-                img.src = url;
+
+                if (this.stagePath) {
+                    const stageUrl = `${this.basePath}${this.stagePath}/${key}`;
+                    
+                    img.onerror = () => {
+                        const fallbackUrl = `${this.basePath}${key}`;
+                        
+                        img.onerror = () => {
+                            console.error(`[Assets] ❌ Load failed completely: ${key}`);
+                            this.loadingPromises[key] = null;
+                            resolve(null);
+                        };
+                        img.src = fallbackUrl;
+                    };
+                    
+                    img.src = stageUrl;
+                } else {
+                    const defaultUrl = `${this.basePath}${key}`;
+                    img.onerror = () => {
+                        console.error(`[Assets] ❌ Load failed: ${defaultUrl}`);
+                        this.loadingPromises[key] = null;
+                        resolve(null);
+                    };
+                    img.src = defaultUrl;
+                }
             });
         }
 
-        // 3. ロード中の場合は、一瞬だけ null が返る（ゲームループは止まらない）
-        // ※ 完全にロードされるまでの数フレーム間、透明になるか白丸で代用されます
         return null; 
     }
 
-    /** 自機など、ゲーム開始時に「絶対に最初から画面にいないと困るもの」だけを
-     * 事前にロードしておきたい場合に使用するセーフティメソッド *\
-     */
-    async preload(keys) {
-        // すべてを get() に丸投げして、そのロード完了を待つ
+    async preload(keys, stagePath) {
+        this.stagePath = stagePath;
         await Promise.all(keys.map(key => {
             this.get(key);
             return this.loadingPromises[key] || Promise.resolve();
