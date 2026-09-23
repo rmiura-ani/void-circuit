@@ -75,7 +75,7 @@ export class Entity {
 
 
 /**
- * AssetManager: 画像アセットの完全動的オンデマンドロード管理（404ログ抑制版）
+ * AssetManager: 画像アセットの完全動的オンデマンドロード管理
  */
 export class AssetManager {
     constructor(basePath) {
@@ -94,60 +94,65 @@ export class AssetManager {
         if (key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
             return null;
         }
-
+        
         if (!this.loadingPromises[key]) {
-            this.loadingPromises[key] = (async () => {
-                let targetUrl = null;
+            this.loadingPromises[key] = new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
 
-                // 1. stagePath が設定されている場合、まず fetch で存在確認
+                img.onload = () => {
+                    this.imageCache[key] = img;
+                    console.log(`[Assets] Ready: ${key} (from ${img.src})`);
+                    resolve(img);
+                };
+
                 if (this.stagePath) {
                     const stageUrl = `${this.basePath}${this.stagePath}/${key}`;
-                    try {
-                        const res = await fetch(stageUrl, { method: 'HEAD' });
-                        if (res.ok) {
-                            targetUrl = stageUrl;
-                        }
-                    } catch (e) {
-                        // ネットワークエラー等の場合はそのまま親へフォールバック
-                    }
-                }
-
-                // 2. stagePath で見つからなかった場合はデフォルト（親フォルダ）パスを使用
-                if (!targetUrl) {
-                    targetUrl = `${this.basePath}${key}`;
-                }
-
-                // 3. 確定したパスで Image オブジェクトを生成・ロード
-                return new Promise(resolve => {
-                    const img = new Image();
-                    img.crossOrigin = "anonymous";
-
-                    img.onload = () => {
-                        this.imageCache[key] = img;
-                        console.log(`[Assets] Ready: ${key} (from ${img.src})`);
-                        resolve(img);
-                    };
-
+                    
                     img.onerror = () => {
-                        console.error(`[Assets] ❌ Load failed: ${targetUrl}`);
+                        const fallbackUrl = `${this.basePath}${key}`;
+                        
+                        img.onerror = () => {
+                            console.error(`[Assets] ❌ Load failed completely: ${key}`);
+                            this.loadingPromises[key] = null;
+                            resolve(null);
+                        };
+                        img.src = fallbackUrl;
+                    };
+                    
+                    img.src = stageUrl;
+                } else {
+                    const defaultUrl = `${this.basePath}${key}`;
+                    img.onerror = () => {
+                        console.error(`[Assets] ❌ Load failed: ${defaultUrl}`);
                         this.loadingPromises[key] = null;
                         resolve(null);
                     };
-
-                    img.src = targetUrl;
-                });
-            })();
+                    img.src = defaultUrl;
+                }
+            });
         }
 
         return null; 
     }
 
+    /** 💡 キャッシュ明示的クリアメソッド */
+    clearCache() {
+        this.imageCache = {};
+        this.loadingPromises = {};
+    }
+
     async preload(keys, stagePath) {
+        // 💡 ステージ切り替え時は古いキャッシュを破棄して読み直しを許可する
+        if (this.stagePath !== stagePath) {
+            this.clearCache();
+        }
         this.stagePath = stagePath;
+
         await Promise.all(keys.map(key => {
             this.get(key);
             return this.loadingPromises[key] || Promise.resolve();
         }));
-        console.log("[Assets] Core images preloaded.");
+        console.log(`[Assets] Core images preloaded for: ${stagePath || 'default'}`);
     }
 }

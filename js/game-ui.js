@@ -244,7 +244,7 @@ export class GameUIManager {
         }
 
         // ---------------------------------------------------------------
-        // 🌌 2. 通常の道中開始時：KV演出 (既存のロジックを維持 / STAGE 1〜6)
+        // 🌌 2. 通常の道中開始時：KV演出
         // ---------------------------------------------------------------
         let kvPath = null;
         let kvDuration = 180;
@@ -264,7 +264,14 @@ export class GameUIManager {
 
             if (kvPath && this.game.assets) {
                 const kvImage = this.game.assets.get?.(kvPath) || this.game.assets[kvPath];
-                if (kvImage && kvImage.complete) {
+
+                // 💡 修正ポイント: 画像が存在し、読み込みが完了しており、かつ src に現在の kvPath が含まれているか検証
+                const isCorrectImageLoaded = kvImage && 
+                    kvImage.complete && 
+                    kvImage.naturalWidth !== 0 && 
+                    kvImage.src.includes(encodeURI(kvPath));
+
+                if (isCorrectImageLoaded) {
                     ctx.save();
                     const progress = this.game.frame / kvDuration;
                     let kvAlpha = 1.0;
@@ -293,6 +300,7 @@ export class GameUIManager {
                 }
             }
 
+            // ステージ名テキストの描画（画像ロード前でも文字は正しくフェードイン表示される）
             const textCenterY = GAME_CONFIG.HEIGHT * 0.65;
             ctx.font = '16px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha})`;
