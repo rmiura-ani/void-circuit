@@ -187,6 +187,10 @@ export class WarningEffect extends Entity {
         // 3. Entityとしてのプロパティ設定
         this.active = true;
         this.hp = Infinity; // 破壊不能
+
+        // 4. SE
+        game.sc.audio?.playSiren();
+
     }
 
     /**

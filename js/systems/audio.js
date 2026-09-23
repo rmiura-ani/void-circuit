@@ -45,7 +45,8 @@ export class AudioManager {
                 changeWp:   { file: 'changeWp.ogg',   vol: 0.8 },
                 explosion:  { file: 'explosion.ogg',  vol: 0.3 },
                 hitSound:   { file: 'hitHurt.ogg',    vol: 0.5 },
-                powerUp:    { file: 'powerUp.ogg',    vol: 0.7 },                
+                powerUp:    { file: 'powerUp.ogg',    vol: 0.7 },          
+                siren:      { file: 'siren.ogg',    vol: 0.4 }      
             }
         };
         this.seKeys = Object.keys(this.CONFIG.SE);
