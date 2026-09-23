@@ -54,6 +54,10 @@ export class GameCollisionManager {
         // 敵の当たり判定（vs 自機弾）
         for (const enemy of enemies) {
             if (!enemy.active) continue;
+
+            // 💡 敵（ボス）が無敵状態（isInvincible === true）ならヒット判定自体をスキップ
+            if (enemy.isInvincible) continue;
+
             if (
                 enemy.y + enemy.height < GAME_CONFIG.UI_HEADER_HEIGHT ||            
                 enemy.y >= GAME_CONFIG.HEIGHT ||          

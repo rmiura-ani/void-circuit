@@ -17,7 +17,7 @@ import { Game } from './game.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.61";
+        this.VERSION = "0.62";
         this.canvas = document.getElementById('game-canvas');
 
         // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）

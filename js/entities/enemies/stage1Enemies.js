@@ -75,19 +75,6 @@ export class BossEnemy_01 extends BossEnemy {
                 game.entities.push(new EnemyBullet(bx - 20, by, Math.cos(angle) * 4, Math.sin(angle) * 4));
                 game.entities.push(new EnemyBullet(bx + 20, by, Math.cos(angle) * 4, Math.sin(angle) * 4));
             }
-
-            // 制限時間切れチェック
-            if (this.frame >= this.timeLimit) {
-                this.state = "ESCAPE";
-            }
-        }
-
-        // 3. 撤退フェーズ
-        if (this.state === "ESCAPE") {
-            this.y -= 3.0;
-            if (this.y < -100) {
-                this.active = false; // 現行の消滅フラグ
-            }
         }
     }
 
