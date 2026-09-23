@@ -1,4 +1,4 @@
-/**
+/*
  * PROJECT: VOID-CIRCUIT
  * 
  * entities/enemies/stage1Enemies.js - STAGE-1 (Iron Vein) 固有敵クラス群 & ボス
@@ -9,10 +9,12 @@
  */
 "use strict";
 
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+
 // ========================================================
 // BossEnemy_01 (アイアン・ヴェイン防衛コア)
 // ========================================================
-class BossEnemy_01 extends BossEnemy {
+export class BossEnemy_01 extends BossEnemy {
     constructor(game, x, y, hp = 500, timeLimit = 1800, timeMultiplier = 100) {
         // BossEnemy(game, x, y, hp, timeLimit, timeMultiplier) を呼び出し
         super(game, x, y, hp, timeLimit, timeMultiplier);
@@ -45,8 +47,10 @@ class BossEnemy_01 extends BossEnemy {
 
         // 2. 戦闘フェーズ（左右移動 ＋ 周期弾幕）
         if (this.state === "BATTLE") {
+            const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : 320;
+
             // 左上原点基準で左右にゆらゆら揺れる
-            this.x = (GAME_CONFIG.WIDTH / 2 - this.width / 2) + Math.sin(this.frame * 0.02) * 60;
+            this.x = (gameWidth / 2 - this.width / 2) + Math.sin(this.frame * 0.02) * 60;
 
             // 弾幕パターンA (120フレーム毎に全方位8方向弾)
             if (this.frame % 120 === 0) {
@@ -105,7 +109,5 @@ class BossEnemy_01 extends BossEnemy {
 // ========================================================
 // ENEMY_REGISTRY へのボス登録
 // ========================================================
-if (typeof ENEMY_REGISTRY !== "undefined") {
-    ENEMY_REGISTRY.set("boss_01", BossEnemy_01);
-    ENEMY_REGISTRY.set("BOSS_01", BossEnemy_01); // 大文字小文字両対応
-}
+ENEMY_REGISTRY.set("boss_01", BossEnemy_01);
+ENEMY_REGISTRY.set("BOSS_01", BossEnemy_01); // 大文字小文字両対応

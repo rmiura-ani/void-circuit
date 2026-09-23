@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-5 固有のザコ・中型敵クラス群
@@ -15,7 +18,7 @@
 /**
  * 分裂時に飛び散る小型細胞クラス（CellMitosisEnemy等から自動生成される）
  */
-class CellMiniEnemy extends Enemy {
+export class CellMiniEnemy extends Enemy {
     get imageName() { return "enemy_cell_mini.webp"; }
 
     constructor(game, x, y, vx, vy) {
@@ -39,16 +42,15 @@ class CellMiniEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new CellMiniEnemy(game, x, y, data.vx || 0, data.vy || 2);
     }
 }
 
-
 /**
  * 1. CellMitosis: 降下中に被弾（撃破）すると左右に2つの小型細胞（CellMini）に分裂して飛び散る増殖機
  */
-class CellMitosisEnemy extends Enemy {
+export class CellMitosisEnemy extends Enemy {
     get imageName() { return "enemy_cell_mitosis.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -80,7 +82,7 @@ class CellMitosisEnemy extends Enemy {
         return isDead;
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new CellMitosisEnemy(game, x, y, bType);
     }
 }
@@ -88,7 +90,7 @@ class CellMitosisEnemy extends Enemy {
 /**
  * 2. PulseSpore: BGMの脈動（パルス）と同調して「膨張・縮小」を繰り返し、最大膨張時に全方位弾を解放するビート同期機
  */
-class PulseSporeEnemy extends Enemy {
+export class PulseSporeEnemy extends Enemy {
     get imageName() { return "enemy_pulse_spore.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -132,7 +134,7 @@ class PulseSporeEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new PulseSporeEnemy(game, x, y, bType);
     }
 }
@@ -140,7 +142,7 @@ class PulseSporeEnemy extends Enemy {
 /**
  * 3. BioTentacle: 画面端から滑らかなベジェ曲線運動（ウネウネ動き）で画面中央に触手を伸ばす生体機
  */
-class BioTentacleEnemy extends Enemy {
+export class BioTentacleEnemy extends Enemy {
     get imageName() { return "enemy_bio_tentacle.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -168,7 +170,7 @@ class BioTentacleEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BioTentacleEnemy(game, x, y, bType);
     }
 }
@@ -176,7 +178,7 @@ class BioTentacleEnemy extends Enemy {
 /**
  * 4. LeechParasite: 自機に向かって超低速で寄生飛行。接触すると被弾ダメージではなく「一定時間連射速度低下」を付与
  */
-class LeechParasiteEnemy extends Enemy {
+export class LeechParasiteEnemy extends Enemy {
     get imageName() { return "enemy_leech_parasite.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -204,7 +206,7 @@ class LeechParasiteEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new LeechParasiteEnemy(game, x, y, bType);
     }
 }
@@ -212,7 +214,7 @@ class LeechParasiteEnemy extends Enemy {
 /**
  * 5. HeartNucleus: 周囲の小型雑魚を一定周期で吸引・自己回復（HP加算）を行う中型生体コア
  */
-class HeartNucleusEnemy extends Enemy {
+export class HeartNucleusEnemy extends Enemy {
     get imageName() { return "enemy_heart_nucleus.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -245,7 +247,7 @@ class HeartNucleusEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new HeartNucleusEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -261,7 +263,7 @@ class HeartNucleusEnemy extends Enemy {
  * STAGE-5 ボス: 生体DNAコア（Planetary Pulse / BossEnemy_05）
  * 特徴: バイオレットのパルス明滅と、HP50%未満での細胞分裂・暴走（発射速度倍増＆脈動巨大化）を行うボス
  */
-class BossEnemy_05 extends BossEnemy {
+export class BossEnemy_05 extends BossEnemy {
     get imageName() { return "enemy_boss_05.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -332,18 +334,20 @@ class BossEnemy_05 extends BossEnemy {
     }
 
     onDie(game) {
-        for (let i = 0; i < 14; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
-                    { maxHp: 110 }
-                );
-            }, i * 90);
+        if (game.collisions) {
+            for (let i = 0; i < 14; i++) {
+                setTimeout(() => {
+                    game.collisions.createExplosion(
+                        this.x + Math.random() * this.width, 
+                        this.y + Math.random() * this.height, 
+                        { maxHp: 110 }
+                    );
+                }, i * 90);
+            }
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_05(
             game, x, y, 
             data.hp || 90, 
@@ -358,14 +362,10 @@ class BossEnemy_05 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('cell_mini', CellMiniEnemy);
-    ENEMY_REGISTRY.set('cell_mitosis', CellMitosisEnemy);
-    ENEMY_REGISTRY.set('pulse_spore', PulseSporeEnemy);
-    ENEMY_REGISTRY.set('bio_tentacle', BioTentacleEnemy);
-    ENEMY_REGISTRY.set('leech_parasite', LeechParasiteEnemy);
-    ENEMY_REGISTRY.set('heart_nucleus', HeartNucleusEnemy);
-    ENEMY_REGISTRY.set('boss_05', BossEnemy_05);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('cell_mini', CellMiniEnemy);
+ENEMY_REGISTRY.set('cell_mitosis', CellMitosisEnemy);
+ENEMY_REGISTRY.set('pulse_spore', PulseSporeEnemy);
+ENEMY_REGISTRY.set('bio_tentacle', BioTentacleEnemy);
+ENEMY_REGISTRY.set('leech_parasite', LeechParasiteEnemy);
+ENEMY_REGISTRY.set('heart_nucleus', HeartNucleusEnemy);
+ENEMY_REGISTRY.set('boss_05', BossEnemy_05);

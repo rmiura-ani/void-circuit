@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-4 固有のザコ・中型敵クラス群
@@ -15,7 +18,7 @@
 /**
  * 1. DustScout: 画面下部（砂塵の中から）逆噴射で「下から上へ」上昇してくる逆スクロール偵察機
  */
-class DustScoutEnemy extends Enemy {
+export class DustScoutEnemy extends Enemy {
     get imageName() { return "enemy_dust_scout.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -42,7 +45,7 @@ class DustScoutEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new DustScoutEnemy(game, x, y, bType);
     }
 }
@@ -50,7 +53,7 @@ class DustScoutEnemy extends Enemy {
 /**
  * 2. RelicPrism: 八角形の古代パーツ。一定位置で静止・回転しながら幾何学的な格子状クロス弾幕を生成
  */
-class RelicPrismEnemy extends Enemy {
+export class RelicPrismEnemy extends Enemy {
     get imageName() { return "enemy_relic_prism.webp"; }
 
     constructor(game, x, y, bulletType, stopY = 120) {
@@ -107,7 +110,7 @@ class RelicPrismEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new RelicPrismEnemy(game, x, y, bType, data.stopY || 120);
     }
 }
@@ -115,7 +118,7 @@ class RelicPrismEnemy extends Enemy {
 /**
  * 3. MirageCrawler: 砂漠の蜃気楼（ラスタスクロール波形）のようにX軸がブレながらゆっくり降下する機体
  */
-class MirageCrawlerEnemy extends Enemy {
+export class MirageCrawlerEnemy extends Enemy {
     get imageName() { return "enemy_mirage_crawler.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -142,7 +145,7 @@ class MirageCrawlerEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new MirageCrawlerEnemy(game, x, y, bType);
     }
 }
@@ -150,7 +153,7 @@ class MirageCrawlerEnemy extends Enemy {
 /**
  * 4. SandPillar: 縦長柱状の防壁構造。前面からの通常弾を大幅軽減/跳ね返す無効化ガードを持つ
  */
-class SandPillarEnemy extends Enemy {
+export class SandPillarEnemy extends Enemy {
     get imageName() { return "enemy_sand_pillar.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -175,7 +178,7 @@ class SandPillarEnemy extends Enemy {
         return super.takeDamage(reducedAmount);
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new SandPillarEnemy(game, x, y, bType);
     }
 }
@@ -183,7 +186,7 @@ class SandPillarEnemy extends Enemy {
 /**
  * 5. GigaOrb: エネルギーチャージ（フラッシュ前兆）を行い、直線状に太い弾幕を一気に射出する高耐久コア
  */
-class GigaOrbEnemy extends Enemy {
+export class GigaOrbEnemy extends Enemy {
     get imageName() { return "enemy_giga_orb.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -245,7 +248,7 @@ class GigaOrbEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new GigaOrbEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -261,7 +264,7 @@ class GigaOrbEnemy extends Enemy {
  * STAGE-4 ボス: 地上絵守護神（Ancient Golem / BossEnemy_04）
  * 特徴: 幾何学的な遺跡の地上絵をなぞるように多角形移動し、ポイント毎にサークル弾幕を展開する石像守護神
  */
-class BossEnemy_04 extends BossEnemy {
+export class BossEnemy_04 extends BossEnemy {
     get imageName() { return "enemy_boss_04.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -325,18 +328,20 @@ class BossEnemy_04 extends BossEnemy {
     }
 
     onDie(game) {
-        for (let i = 0; i < 10; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
-                    { maxHp: 120 }
-                );
-            }, i * 120);
+        if (game.collisions) {
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => {
+                    game.collisions.createExplosion(
+                        this.x + Math.random() * this.width, 
+                        this.y + Math.random() * this.height, 
+                        { maxHp: 120 }
+                    );
+                }, i * 120);
+            }
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_04(
             game, x, y, 
             data.hp || 80, 
@@ -351,13 +356,9 @@ class BossEnemy_04 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('dust_scout', DustScoutEnemy);
-    ENEMY_REGISTRY.set('relic_prism', RelicPrismEnemy);
-    ENEMY_REGISTRY.set('mirage_crawler', MirageCrawlerEnemy);
-    ENEMY_REGISTRY.set('sand_pillar', SandPillarEnemy);
-    ENEMY_REGISTRY.set('giga_orb', GigaOrbEnemy);
-    ENEMY_REGISTRY.set('boss_04', BossEnemy_04);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('dust_scout', DustScoutEnemy);
+ENEMY_REGISTRY.set('relic_prism', RelicPrismEnemy);
+ENEMY_REGISTRY.set('mirage_crawler', MirageCrawlerEnemy);
+ENEMY_REGISTRY.set('sand_pillar', SandPillarEnemy);
+ENEMY_REGISTRY.set('giga_orb', GigaOrbEnemy);
+ENEMY_REGISTRY.set('boss_04', BossEnemy_04);

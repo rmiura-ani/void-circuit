@@ -8,6 +8,10 @@
  * Note: Included assets are the property of their respective owners.
  */
 
+import { Player, Bullet } from './entities/player.js';
+import { Enemy, EnemyBullet } from './entities/enemy.js';
+import { ScoreText, Particle } from './entities/effects.js';
+
 export class GameCollisionManager {
     constructor(game) {
         this.game = game;
@@ -116,12 +120,12 @@ export class GameCollisionManager {
                         const amount = 10;
                         this.game.score += amount;
                         if (this.game.sc.audio) this.game.sc.audio.playHitSound();
-                        this.game.particles.push(new Particle(pBullet.x, pBullet.y));
+                        this.game.entities.push(new Particle(pBullet.x, pBullet.y));
                         // ボスだけ "+10" スコア演出                        
                         if (enemy.isBoss) {
                             const scatterX = (Math.random() - 0.5) * 10;
                             const scatterY = (Math.random() - 0.5) * 10;
-                            this.game.scoreTexts.push(new ScoreText(pBullet.x + scatterX, pBullet.y + scatterY, `+${amount}`, "#0FF"));
+                            this.game.entities.push(new ScoreText(pBullet.x + scatterX, pBullet.y + scatterY, `+${amount}`, "#0FF"));
                         }
                     }
                 }
@@ -162,7 +166,7 @@ export class GameCollisionManager {
         const centerX = enemy.x + enemy.width / 2;
         let centerY = enemy.isBoss ? enemy.y + (enemy.height * 0.8) : enemy.y + enemy.height / 2;
         
-        this.game.scoreTexts.push(new ScoreText(centerX, centerY, amount));
+        this.game.entities.push(new ScoreText(centerX, centerY, amount));
 
         // ボスはタイムボーナスがある
         if (enemy.isBoss){
@@ -174,7 +178,7 @@ export class GameCollisionManager {
             const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.game.score += bonus;
-                this.game.scoreTexts.push(new ScoreText(GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+                this.game.entities.push(new ScoreText(GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
             }
         }
     }
@@ -185,7 +189,7 @@ export class GameCollisionManager {
         const type = enemy.isBoss ? 'boss' : 'enemy';
 
         for (let i = 0; i < count; i++) {
-            this.game.particles.push(new Particle(x, y, type));
+            this.game.entities.push(new Particle(x, y, type));
         }
 
         if (this.game.sc.audio && !soundoff) {

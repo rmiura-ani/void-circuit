@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-7 固有のザコ・中型敵クラス群
@@ -15,7 +18,7 @@
 /**
  * 1. CircuitWalker: 背景の電子グリッドに沿うようにカクカクと90度直角に曲がりながら迫る電子プログラム機
  */
-class CircuitWalkerEnemy extends Enemy {
+export class CircuitWalkerEnemy extends Enemy {
     get imageName() { return "enemy_circuit_walker.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -50,7 +53,7 @@ class CircuitWalkerEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new CircuitWalkerEnemy(game, x, y, bType);
     }
 }
@@ -58,7 +61,7 @@ class CircuitWalkerEnemy extends Enemy {
 /**
  * 2. VoidBit: 自機の周囲を円軌道でグルグル周回しながら中心（自機）に向けて高密度射撃を行う電子ビット機
  */
-class VoidBitEnemy extends Enemy {
+export class VoidBitEnemy extends Enemy {
     get imageName() { return "enemy_void_bit.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -96,7 +99,7 @@ class VoidBitEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new VoidBitEnemy(game, x, y, bType);
     }
 }
@@ -104,7 +107,7 @@ class VoidBitEnemy extends Enemy {
 /**
  * 3. GateKeeper: 画面中央を左右に陣取り、格子状（レーザー）の弾幕の壁を作る中型要塞防衛機
  */
-class GateKeeperEnemy extends Enemy {
+export class GateKeeperEnemy extends Enemy {
     get imageName() { return "enemy_gate_keeper.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -137,7 +140,7 @@ class GateKeeperEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new GateKeeperEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -153,7 +156,7 @@ class GateKeeperEnemy extends Enemy {
  * STAGE-7 ボス: 最終要塞機械心臓（Absolute Core / BossEnemy_07）
  * 特徴: 荘厳なFMオルガンサウンドと同期。HP50%以下で変形演出に入り【第2形態（Overlord）】へと覚醒・変身するラストボス
  */
-class BossEnemy_07 extends BossEnemy {
+export class BossEnemy_07 extends BossEnemy {
     get imageName() { return "enemy_boss_07_phase1.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -169,6 +172,7 @@ class BossEnemy_07 extends BossEnemy {
         this.timer = 0;
         this.baseX = x;
         this.formPhase = 1; // 1: 第一形態, 2: 最終形態
+        this.isInvincible = false;
     }
 
     update(game) {
@@ -238,6 +242,12 @@ class BossEnemy_07 extends BossEnemy {
         }
     }
 
+    /** 変形演出中（isInvincible = true）はすべての被ダメージを無効化 */
+    takeDamage(amount) {
+        if (this.isInvincible) return false;
+        return super.takeDamage(amount);
+    }
+
     draw(ctx, isInvincibleCheat = false) {
         ctx.save();
         if (this.state === 'TRANSFORM') {
@@ -253,19 +263,21 @@ class BossEnemy_07 extends BossEnemy {
     }
 
     onDie(game) {
-        // 機械心臓が完全停止。全画面を揺さぶるグランドフィナーレの大誘爆
-        for (let i = 0; i < 35; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x - 20 + Math.random() * (this.width + 40), 
-                    this.y - 20 + Math.random() * (this.height + 40), 
-                    { maxHp: 200 }
-                );
-            }, i * 60);
+        if (game.collisions) {
+            // 機械心臓が完全停止。全画面を揺さぶるグランドフィナーレの大誘爆
+            for (let i = 0; i < 35; i++) {
+                setTimeout(() => {
+                    game.collisions.createExplosion(
+                        this.x - 20 + Math.random() * (this.width + 40), 
+                        this.y - 20 + Math.random() * (this.height + 40), 
+                        { maxHp: 200 }
+                    );
+                }, i * 60);
+            }
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_07(
             game, x, y, 
             data.hp || 150, 
@@ -280,11 +292,7 @@ class BossEnemy_07 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('circuit_walker', CircuitWalkerEnemy);
-    ENEMY_REGISTRY.set('void_bit', VoidBitEnemy);
-    ENEMY_REGISTRY.set('gate_keeper', GateKeeperEnemy);
-    ENEMY_REGISTRY.set('boss_07', BossEnemy_07);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('circuit_walker', CircuitWalkerEnemy);
+ENEMY_REGISTRY.set('void_bit', VoidBitEnemy);
+ENEMY_REGISTRY.set('gate_keeper', GateKeeperEnemy);
+ENEMY_REGISTRY.set('boss_07', BossEnemy_07);

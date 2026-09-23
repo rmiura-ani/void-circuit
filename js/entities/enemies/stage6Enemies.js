@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-6 固有のザコ・中型敵クラス群
@@ -15,7 +18,7 @@
 /**
  * 1. OrbitInterceptor: 画面奥から大気圏突入（赤熱エフェクト）とともに超高速進入し、急ブレーキ後ミサイルを撒く邀撃機
  */
-class OrbitInterceptorEnemy extends Enemy {
+export class OrbitInterceptorEnemy extends Enemy {
     get imageName() { return "enemy_orbit_interceptor.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -66,7 +69,7 @@ class OrbitInterceptorEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new OrbitInterceptorEnemy(game, x, y, bType);
     }
 }
@@ -74,7 +77,7 @@ class OrbitInterceptorEnemy extends Enemy {
 /**
  * 2. HeatArmor: 正面装甲が完全耐熱加工されており、正面からの攻撃によるダメージを「0」に抑え込む重装甲機
  */
-class HeatArmorEnemy extends Enemy {
+export class HeatArmorEnemy extends Enemy {
     get imageName() { return "enemy_heat_armor.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -112,7 +115,7 @@ class HeatArmorEnemy extends Enemy {
         return super.takeDamage(amount);
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new HeatArmorEnemy(game, x, y, bType);
     }
 }
@@ -120,7 +123,7 @@ class HeatArmorEnemy extends Enemy {
 /**
  * 3. HomingPod: 自機を執拗に低速追尾するホーミングミサイル弾（HomingBullet）を射出するポッド機
  */
-class HomingPodEnemy extends Enemy {
+export class HomingPodEnemy extends Enemy {
     get imageName() { return "enemy_homing_pod.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -158,15 +161,15 @@ class HomingPodEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
-        return new LeechParasiteEnemy(game, x, y, bType);
+    static create(game, x, y, bType, data = {}) {
+        return new HomingPodEnemy(game, x, y, bType);
     }
 }
 
 /**
  * 4. BeamCruiser: 画面横から巨大戦艦のパーツとしてスライド出現。画面左/右半分を薙ぎ払う極太ビーム前兆攻撃を行う
  */
-class BeamCruiserEnemy extends Enemy {
+export class BeamCruiserEnemy extends Enemy {
     get imageName() { return "enemy_beam_cruiser.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -194,7 +197,7 @@ class BeamCruiserEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new BeamCruiserEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -204,7 +207,7 @@ class BeamCruiserEnemy extends Enemy {
 /**
  * 5. BurnerDrone: 画面下部から高熱バーナーを突き上げながら上昇してくるバーナー機
  */
-class BurnerDroneEnemy extends Enemy {
+export class BurnerDroneEnemy extends Enemy {
     get imageName() { return "enemy_burner_drone.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -233,7 +236,7 @@ class BurnerDroneEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BurnerDroneEnemy(game, x, y, bType);
     }
 }
@@ -247,7 +250,7 @@ class BurnerDroneEnemy extends Enemy {
  * STAGE-6 ボス: 超巨大空中戦艦（Burning Dread / BossEnemy_06）
  * 特徴: 画面上部をほぼ占拠する要塞級巨大ボディ。反動を伴う砲撃と、HP30%以下での赤熱発狂モード
  */
-class BossEnemy_06 extends BossEnemy {
+export class BossEnemy_06 extends BossEnemy {
     get imageName() { return "enemy_boss_06.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -317,18 +320,20 @@ class BossEnemy_06 extends BossEnemy {
     }
 
     onDie(game) {
-        for (let i = 0; i < 24; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
-                    { maxHp: 150 }
-                );
-            }, i * 80);
+        if (game.collisions) {
+            for (let i = 0; i < 24; i++) {
+                setTimeout(() => {
+                    game.collisions.createExplosion(
+                        this.x + Math.random() * this.width, 
+                        this.y + Math.random() * this.height, 
+                        { maxHp: 150 }
+                    );
+                }, i * 80);
+            }
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_06(
             game, x, y, 
             data.hp || 120, 
@@ -343,13 +348,9 @@ class BossEnemy_06 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('orbit_interceptor', OrbitInterceptorEnemy);
-    ENEMY_REGISTRY.set('heat_armor', HeatArmorEnemy);
-    ENEMY_REGISTRY.set('homing_pod', HomingPodEnemy);
-    ENEMY_REGISTRY.set('beam_cruiser', BeamCruiserEnemy);
-    ENEMY_REGISTRY.set('burner_drone', BurnerDroneEnemy);
-    ENEMY_REGISTRY.set('boss_06', BossEnemy_06);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('orbit_interceptor', OrbitInterceptorEnemy);
+ENEMY_REGISTRY.set('heat_armor', HeatArmorEnemy);
+ENEMY_REGISTRY.set('homing_pod', HomingPodEnemy);
+ENEMY_REGISTRY.set('beam_cruiser', BeamCruiserEnemy);
+ENEMY_REGISTRY.set('burner_drone', BurnerDroneEnemy);
+ENEMY_REGISTRY.set('boss_06', BossEnemy_06);

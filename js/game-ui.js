@@ -141,7 +141,7 @@ export class GameUIManager {
             bonusEl.innerText = "---";
             bonusEl.style.color = "#888";
         }        
-        document.getElementById('debug-load').innerText = this.game.entities.length + this.game.particles.length;
+        document.getElementById('debug-load').innerText = this.game.entities.length;
 
         // 🌟 ここから追記：SPAWN と KILL の数値を画面に反映
         const spawnEl = document.getElementById('debug-spawn');

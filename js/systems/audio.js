@@ -2,7 +2,7 @@
  * PROJECT: VOID-CIRCUIT
  *
  * audio.js
- * * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
@@ -19,38 +19,33 @@ export class AudioManager {
         this.bgms = {};
         this.sounds = {};
 
-        // 🔊 【新設】マスターボリュームの％管理 (0.0 〜 1.0)
+        // 🔊 マスターボリュームの％管理 (0.0 〜 1.0)
         this.seVolume = 0.8;   // デフォルト 80%
         this.bgmVolume = 0.7;  // デフォルト 70%
 
-        // BGMテスト用の再生終了時コールバックを保持するプロパティ
+        // BGMテスト用の再生終了時コールバック
         this.onBGMEnded = null;
 
-        // 🎛️ EQの設定値をAudioManager自身で一元管理
-        this.eqSettings = {
-            low: 0,
-            mid: 0,
-            high: 0
-        };
+        // 🎛️ EQの設定値
+        this.eqSettings = { low: 0, mid: 0, high: 0 };
 
         // 🏛️ 空間アコースティックプリセットの定義
         this.ROOM_PRESETS = {
-            0: { name: "1.NORMAL",  delayTime: 0.0,  feedback: 0.0, reverbWet: 0.0, echoWet: 0.0, desc: "DRY SOUND" },
-            1: { name: "2.CP-01 ", delayTime: 0.03, feedback: 0.35, reverbWet: 0.3, echoWet: 0.15, desc: "METALLIC SHORT ECHO" },
-            2: { name: "3.GALAXY",   delayTime: 0.4,  feedback: 0.4, reverbWet: 0.0, echoWet: 0.35, desc: "DEEP SPACE DELAY" },
-            3: { name: "4.IND-ST", delayTime: 0.22,  feedback: 0.3, reverbWet: 0.35, echoWet: 0.25, desc: "HEAVY INDUSTRIAL REVERB" }
+            0: { name: "1.NORMAL",  delayTime: 0.0,  feedback: 0.0,  reverbWet: 0.0,  echoWet: 0.0,  desc: "DRY SOUND" },
+            1: { name: "2.CP-01 ",  delayTime: 0.03, feedback: 0.35, reverbWet: 0.3,  echoWet: 0.15, desc: "METALLIC SHORT ECHO" },
+            2: { name: "3.GALAXY",  delayTime: 0.4,  feedback: 0.4,  reverbWet: 0.0,  echoWet: 0.35, desc: "DEEP SPACE DELAY" },
+            3: { name: "4.IND-ST",  delayTime: 0.22, feedback: 0.3,  reverbWet: 0.35, echoWet: 0.25, desc: "HEAVY INDUSTRIAL REVERB" }
         };
-        this.currentPresetId = 0; // デフォルトは NORMAL
+        this.currentPresetId = 0;
 
-        // 起動時は空っぽにしておく
         this.DYNAMIC_BGM_LIST = []; 
         this.CONFIG = {
             SE: {
-                shot:      { file: 'shot.ogg',       vol: 0.3 },
-                changeWp:  { file: 'changeWp.ogg',   vol: 0.8 },
-                explosion: { file: 'explosion.ogg',  vol: 0.3 },
-                hitSound:  { file: 'hitHurt.ogg',    vol: 0.5 },
-                powerUp:   { file: 'powerUp.ogg',    vol: 0.7 },                
+                shot:       { file: 'shot.ogg',       vol: 0.3 },
+                changeWp:   { file: 'changeWp.ogg',   vol: 0.8 },
+                explosion:  { file: 'explosion.ogg',  vol: 0.3 },
+                hitSound:   { file: 'hitHurt.ogg',    vol: 0.5 },
+                powerUp:    { file: 'powerUp.ogg',    vol: 0.7 },                
             }
         };
         this.seKeys = Object.keys(this.CONFIG.SE);
@@ -64,21 +59,79 @@ export class AudioManager {
         this.eqHigh = null;
 
         // 🎛️ エフェクト（DSP）ノード群
-        this.dryNode = null;       // 原音用ゲイン
-        this.echoNode = null;      // エコー（ディレイ）ノード
-        this.echoFeedback = null;  // エコーの跳ね返り量ゲイン
-        this.echoWetNode = null;   // エコーの出力ブレンドゲイン
-        this.reverbNodes = [];     // 疑似残響を作るためのマルチタップディレイ配列
-        this.reverbWetNode = null; // リバーブの出力ブレンドゲイン
+        this.dryNode = null;
+        this.echoNode = null;
+        this.echoFeedback = null;
+        this.echoWetNode = null;
+        this.reverbNodes = [];
+        this.reverbWetNode = null;
         
         this.mediaSources = new Map(); // 各Audio要素とSourceNodeの紐付けキャッシュ
 
-        // 例: keyが 'shot' なら、this.playShot という関数を自動で生み出す
-        Object.keys(this.CONFIG.SE).forEach(key => {
+        // メソッドの動的生やし
+        this.seKeys.forEach(key => {
             const methodName = 'play' + key.charAt(0).toUpperCase() + key.slice(1);
             this[methodName] = () => this._playSE(key);
         });
         this.initSEAudio();
+    }
+
+    /** AudioContextの初期化 & 自動再生ロック解除 */
+    _ensureAudioContext() {
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this._setupAudioNodes();
+        }
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+    }
+
+    /** Web Audio API ノード群の構築 */
+    _setupAudioNodes() {
+        this.analyser = this.audioCtx.createAnalyser();
+        this.analyser.fftSize = 64;
+        
+        this.eqLow = this.audioCtx.createBiquadFilter();
+        this.eqLow.type = 'lowshelf';
+        this.eqLow.frequency.value = 200;
+
+        this.eqMid = this.audioCtx.createBiquadFilter();
+        this.eqMid.type = 'peaking';
+        this.eqMid.frequency.value = 1000;
+        this.eqMid.Q.value = 1.0;
+
+        this.eqHigh = this.audioCtx.createBiquadFilter();
+        this.eqHigh.type = 'highshelf';
+        this.eqHigh.frequency.value = 5000;
+
+        this.dryNode = this.audioCtx.createGain();
+        this.dryNode.gain.value = 1.0;
+
+        this.echoNode = this.audioCtx.createDelay(2.0);
+        this.echoFeedback = this.audioCtx.createGain();
+        this.echoWetNode = this.audioCtx.createGain();
+        
+        this.echoNode.connect(this.echoFeedback);
+        this.echoFeedback.connect(this.echoNode);
+        this.echoNode.connect(this.echoWetNode);
+
+        this.reverbWetNode = this.audioCtx.createGain();
+        const delayTimes = [0.011, 0.015, 0.023, 0.037, 0.043, 0.059];
+        this.reverbNodes = delayTimes.map(t => {
+            const d = this.audioCtx.createDelay();
+            d.delayTime.value = t;
+            const g = this.audioCtx.createGain();
+            g.gain.value = 0.65;
+            
+            d.connect(g);
+            g.connect(d);
+            g.connect(this.reverbWetNode);
+            return d;
+        });
+
+        // 集約接続: Analyser -> スピーカー
+        this.analyser.connect(this.audioCtx.destination);
     }
 
     /** SE初期化 */
@@ -87,41 +140,34 @@ export class AudioManager {
             const conf = this.CONFIG.SE[key];
             const audio = new Audio(this.basePath + conf.file);
             audio.crossOrigin = "anonymous";
-            // 🌟 初期化時にも【マスター音量 × 固有音量】を掛け算してセット
             audio.volume = conf.vol * this.seVolume;
             this.sounds[key] = audio;
         });
     }
 
-    /** Controllerから動的に構築されたBGMリストを受け取る */
     setDynamicBGMList(list) {
         this.DYNAMIC_BGM_LIST = list; 
     }
 
-    /** 🔄 【新設】SEマスター音量の変更メソッド (Configから叩かれる) */
     setSEVolume(volume) {
-        this.seVolume = volume;
-        // 既存のベースSE音源すべての実音量を【掛け算】で再計算して適用
+        this.seVolume = Math.max(0, Math.min(1, volume));
         this.seKeys.forEach(key => {
             if (this.sounds[key]) {
                 const baseVol = this.CONFIG.SE[key].vol;
                 this.sounds[key].volume = baseVol * this.seVolume;
             }
         });
-        console.log(`[Audio] Master SE Volume -> ${Math.round(volume * 100)}%`);
+        console.log(`[Audio] Master SE Volume -> ${Math.round(this.seVolume * 100)}%`);
     }
 
-    /** 🔄 【新設】BGMマスター音量の変更メソッド (Configから叩かれる) */
     setBGMVolume(volume) {
-        this.bgmVolume = volume;
-        // 現在流れているBGMがあれば、即座に【掛け算】して反映
-        if (this.currentBgm) {
-            this.currentBgm.volume = 0.7 * this.bgmVolume; // ベースボリューム0.7に掛け算
+        this.bgmVolume = Math.max(0, Math.min(1, volume));
+        if (this.currentBgm && !this.fadeInterval) {
+            this.currentBgm.volume = 0.7 * this.bgmVolume;
         }
-        console.log(`[Audio] Master BGM Volume -> ${Math.round(volume * 100)}%`);
+        console.log(`[Audio] Master BGM Volume -> ${Math.round(this.bgmVolume * 100)}%`);
     }
     
-    /** 起動時のSEプリロード */
     async preloadSE() {
         const loadAud = (a) => new Promise(r => {
             if (!a || a.readyState >= 3) return r();
@@ -130,217 +176,142 @@ export class AudioManager {
             a.load();
             setTimeout(r, 3000);
         });
-        await Promise.all([
-            ...Object.values(this.sounds).map(loadAud)
-        ]);
+        await Promise.all(Object.values(this.sounds).map(loadAud));
         console.log("[Audio] System SE Preload complete.");
     }
 
-    /** ステージ開始時に呼ばれる、特定のBGMの動的ロード */
-    async loadStageBGM(fileName) {
+    async loadStageBGM(fileName, stagePath = null) {
         if (!fileName) return null;
-        
-        // すでに一度読み込んだことがあるBGMならキャッシュを返す
-        if (this.bgms[fileName]) {
-            return this.bgms[fileName];
+
+        // パス解決用の内部ヘルパー
+        const resolvePath = (base, file) => {
+            if (/^(?:[a-z]+:)?\/\//i.test(file)) return file; // absolute URL (http://等) はそのまま
+            const b = base.endsWith('/') ? base : base + '/';
+            const f = file.startsWith('/') ? file.slice(1) : file;
+            return b + f;
+        };
+
+        // 1. stagePath があれば basePath と結合してフルフォルダパスを作る
+        const currentFolder = stagePath 
+            ? resolvePath(this.basePath, stagePath) 
+            : this.basePath;
+        const targetPath = resolvePath(currentFolder, fileName);
+
+        // 🌟 フルパス（targetPath）単位でのみキャッシュチェックを行う
+        if (this.bgms[targetPath]) {
+            this.preparedBgm = this.bgms[targetPath];
+            this.preparedBgmFileName = targetPath;
+            return this.bgms[targetPath];
         }
-        
+
         return new Promise((resolve) => {
-            const audio = new Audio(this.basePath + fileName);
+            const audio = new Audio(targetPath);
             audio.crossOrigin = "anonymous";
-            audio.loop = true; // ゲーム本編は標準でループ再生
-            // 🌟 ロード時も【ベース 0.7 × マスター音量】を掛け算
+            audio.loop = true;
             audio.volume = 0.7 * this.bgmVolume;
 
             let isResolved = false;
 
-            // 読み込み完了を待つ
-            audio.addEventListener('canplaythrough', () => {
+            const onCanPlay = () => {
                 if (isResolved) return;
                 isResolved = true;
-                this.bgms[fileName] = audio; // キャッシュに保存
+                // キャッシュキーは必ずフルパスで保持
+                this.bgms[targetPath] = audio;
+                this.preparedBgm = audio;
+                this.preparedBgmFileName = targetPath;
                 resolve(audio);
-            }, { once: true });
+            };
 
-            audio.addEventListener('error', () => {
+            const onError = () => {
                 if (isResolved) return;
                 isResolved = true;
-                console.error(`[Audio] Failed to load BGM: ${fileName}`);
-                resolve(null);
-            }, { once: true });
 
+                // stagePath で失敗した場合のみ、basePath へフォールバック
+                if (stagePath) {
+                    console.warn(`[Audio] Failed at stagePath: ${targetPath}. Falling back to basePath...`);
+                    this.loadStageBGM(fileName, null).then(resolve);
+                    return;
+                }
+
+                console.error(`[Audio] Failed to load BGM: ${targetPath}`);
+                resolve(null);
+            };
+
+            audio.addEventListener('canplaythrough', onCanPlay, { once: true });
+            audio.addEventListener('error', onError, { once: true });
             audio.load();
 
             setTimeout(() => {
                 if (isResolved) return;
                 isResolved = true;
-                console.warn(`[Audio] BGM load timeout: ${fileName}`);
+                console.warn(`[Audio] BGM load timeout: ${targetPath}`);
                 resolve(null);
             }, 5000);
         });
     }
 
-    /** BGMの再生（ファイル名指定） */
-    playBGM(fileName) {
-        if (!fileName) return;
+    /** Audio要素をWeb Audio APIのアナライザーノードへブリッジする */
+    setupAnalyserBridge(audioElement) {
+        this._ensureAudioContext();
 
-        // 同じ曲が既に流れている場合は何もしない
-        if (this.currentBgmFileName === fileName && this.currentBgm && !this.currentBgm.paused) {
+        // 🌟 重複接続防止: 既に登録済みであればパラメータ更新のみを行って復帰する
+        if (this.mediaSources.has(audioElement)) {
+            const now = this.audioCtx.currentTime;
+            this._applyCurrentEQ(now);
+            this.applyRoomPresetValues(now);
             return;
         }
 
-        this.resetBGM(); // 既存のBGMを完全停止
+        const sourceNode = this.audioCtx.createMediaElementSource(audioElement);
 
-        this.currentBgm = this.bgms[fileName];
-        this.currentBgmFileName = fileName;
+        // 【配線】 Source -> EQ Low -> Mid -> High
+        sourceNode.connect(this.eqLow);
+        this.eqLow.connect(this.eqMid);
+        this.eqMid.connect(this.eqHigh);
 
-        if (this.currentBgm) {
-            this.currentBgm.currentTime = 0; // 再生直前に確実に頭出しを行う
-            // 🌟 再生開始時も【ベース 0.7 × マスター音量】を掛け算
-            this.currentBgm.volume = 0.7 * this.bgmVolume;
-            
-            // Audioタグの音声を Web Audio API の解析土管へバイパス接続する
-            this.setupAnalyserBridge(this.currentBgm);
+        // 1. ドライ音ルート -> Analyser
+        this.eqHigh.connect(this.dryNode);
+        this.dryNode.connect(this.analyser);
 
-            // 曲の再生が終了した時のイベントハンドラを設定
-            this.currentBgm.onended = () => {
-                console.log(`[Audio] BGM ended: ${this.currentBgmFileName}`);
-                if (typeof this.onBGMEnded === 'function') {
-                    this.onBGMEnded();
-                }
-            };
+        // 2. エコー（ディレイ）ルート -> Analyser
+        this.eqHigh.connect(this.echoNode);
+        this.echoWetNode.connect(this.analyser);
 
-            this.currentBgm.play().catch(e => console.warn("Autoplay blocked or audio not ready", e));
-        } else {
-            console.warn(`[Audio] BGM "${fileName}" is not loaded yet. Call loadStageBGM first.`);
-        }
-    }
+        // 3. リバーブ（残響）ルート -> Analyser
+        this.reverbNodes.forEach(dNode => {
+            this.eqHigh.connect(dNode);
+        });
+        this.reverbWetNode.connect(this.analyser);
 
-    /** Audio要素をWeb Audio APIのアナライザーノードへブリッジする */
-    setupAnalyserBridge(audioElement) {
-        // 1. 司令塔(AudioContext)がまだなければ生成
-        if (!this.audioCtx) {
-            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 64; // 32本のスペクトラムバー用
-            
-            // イコライザー(EQ)フィルター群
-            this.eqLow = this.audioCtx.createBiquadFilter();
-            this.eqLow.type = 'lowshelf';
-            this.eqLow.frequency.value = 200; // 200Hz以下
-
-            this.eqMid = this.audioCtx.createBiquadFilter();
-            this.eqMid.type = 'peaking';
-            this.eqMid.frequency.value = 1000; // 1kHzを中心
-            this.eqMid.Q.value = 1.0;          // 帯域の鋭さ
-
-            this.eqHigh = this.audioCtx.createBiquadFilter();
-            this.eqHigh.type = 'highshelf';
-            this.eqHigh.frequency.value = 5000; // 5kHz以上
-
-            // 🎛️ エフェクト（空間音響）ノードの構築
-            this.dryNode = this.audioCtx.createGain();
-            this.dryNode.gain.value = 1.0;
-
-            // エコーノード群
-            this.echoNode = this.audioCtx.createDelay(2.0); // 最大ディレイタイム 2秒
-            this.echoFeedback = this.audioCtx.createGain();
-            this.echoWetNode = this.audioCtx.createGain();
-            
-            // エコー内の内部ループ配線
-            this.echoNode.connect(this.echoFeedback);
-            this.echoFeedback.connect(this.echoNode);
-            this.echoNode.connect(this.echoWetNode);
-
-            // リバーブノード群（軽量マルチタップ・ディレイ・アレイ）
-            this.reverbWetNode = this.audioCtx.createGain();
-            const delayTimes = [0.011, 0.015, 0.023, 0.037, 0.043, 0.059]; // 素数で散らして濃密な残響を作る
-            this.reverbNodes = delayTimes.map(t => {
-                const d = this.audioCtx.createDelay();
-                d.delayTime.value = t;
-                const g = this.audioCtx.createGain();
-                g.gain.value = 0.65; // 反射の減衰
-                
-                // ループを作って跳ね返らせる
-                d.connect(g);
-                g.connect(d);
-                g.connect(this.reverbWetNode);
-                return d;
-            });
-        }
+        // キャッシュに保持
+        this.mediaSources.set(audioElement, sourceNode);
 
         const now = this.audioCtx.currentTime;
-
-        // 新しい曲がブリッジされるたび、記憶しているEQ設定値を即座に再注入する
-        if (this.eqLow)  this.eqLow.gain.setValueAtTime(this.eqSettings.low, now);
-        if (this.eqMid)  this.eqMid.gain.setValueAtTime(this.eqSettings.mid, now);
-        if (this.eqHigh) this.eqHigh.gain.setValueAtTime(this.eqSettings.high, now);
-
-        // 🏛️ 現在選択されている空間プリセットのエフェクト値を再注入
+        this._applyCurrentEQ(now);
         this.applyRoomPresetValues(now);
-
-        // ブラウザの自動再生ガードをすり抜ける保険
-        if (this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
-        }
-
-        // 2. このAudio要素用の「仲介ノード」が未生成なら作る（二重生成エラー防止策）
-        if (!this.mediaSources.has(audioElement)) {
-            const sourceNode = this.audioCtx.createMediaElementSource(audioElement);
-            sourceNode.disconnect();
-
-            // 【配線ルート】
-            // [Source] -> [EQ Low->Mid->High] -> [分岐点]
-            sourceNode.connect(this.eqLow);
-            this.eqLow.connect(this.eqMid);
-            this.eqMid.connect(this.eqHigh);
-
-            // 分岐点からエフェクトへ
-            // 1. ドライ（直進音ルート）
-            this.eqHigh.connect(this.dryNode);
-            this.dryNode.connect(this.analyser);
-
-            // 2. エコー（ディレイ成分ルート）
-            this.eqHigh.connect(this.echoNode);
-            this.echoWetNode.connect(this.analyser);
-
-            // 3. リバーブ（残響成分ルート）
-            this.reverbNodes.forEach(dNode => {
-                this.eqHigh.connect(dNode);
-            });
-            this.reverbWetNode.connect(this.analyser);
-
-            // 最終集約：[Analyser] -> [スピーカー(destination)]
-            this.analyser.connect(this.audioCtx.destination);
-            
-            // キャッシュに保存して再利用
-            this.mediaSources.set(audioElement, sourceNode);
-        }
     }
 
-    /** 記憶しているプリセットの内部数値を物理ノードに流し込む */
+    _applyCurrentEQ(time) {
+        if (this.eqLow)  this.eqLow.gain.setValueAtTime(this.eqSettings.low, time);
+        if (this.eqMid)  this.eqMid.gain.setValueAtTime(this.eqSettings.mid, time);
+        if (this.eqHigh) this.eqHigh.gain.setValueAtTime(this.eqSettings.high, time);
+    }
+
     applyRoomPresetValues(time) {
         if (!this.audioCtx) return;
         const p = this.ROOM_PRESETS[this.currentPresetId];
         if (!p) return;
 
-        // エコーパラメータ反映
         this.echoNode.delayTime.setValueAtTime(p.delayTime, time);
         this.echoFeedback.gain.setValueAtTime(p.feedback, time);
         this.echoWetNode.gain.setValueAtTime(p.echoWet, time);
 
-        // リバーブパラメータ反映
         this.reverbWetNode.gain.setValueAtTime(p.reverbWet, time);
 
-        // 原音（Dry）のバランス調整（残響が深いときは原音をわずかに下げて包囲感を出す）
         const dryVol = p.reverbWet > 0.5 ? 0.8 : 1.0;
         this.dryNode.gain.setValueAtTime(dryVol, time);
     }
 
-    /**
-     * 空間アコースティックプリセットを切り替える
-     * @param {number} presetId - 0: NORMAL, 1: COCKPIT, 2: SPACE, 3: FACTORY
-     */
     setAudioRoomPreset(presetId) {
         if (this.ROOM_PRESETS[presetId] === undefined) return;
         this.currentPresetId = presetId;
@@ -352,25 +323,49 @@ export class AudioManager {
         console.log(`[Audio] Room Preset Changed -> ${this.ROOM_PRESETS[presetId].name}`);
     }
 
-    /** 3バンドEQのゲインを変更 */
     setEQGain(band, value) {
-        if (!this.audioCtx) return;
-        
         if (this.eqSettings[band] !== undefined) {
             this.eqSettings[band] = value;
         }
         
-        const now = this.audioCtx.currentTime;
-        if (band === 'low' && this.eqLow) {
-            this.eqLow.gain.setValueAtTime(value, now);
-        } else if (band === 'mid' && this.eqMid) {
-            this.eqMid.gain.setValueAtTime(value, now);
-        } else if (band === 'high' && this.eqHigh) {
-            this.eqHigh.gain.setValueAtTime(value, now);
+        if (this.audioCtx) {
+            const now = this.audioCtx.currentTime;
+            this._applyCurrentEQ(now);
         }
     }
 
-    /** BGMリセット */
+    playBGM() {
+        if (!this.preparedBgm) {
+            console.warn("[Audio] No BGM is prepared. Call loadStageBGM first.");
+            return;
+        }
+
+        // 既に同じ曲が再生中の場合は何もしない
+        if (this.currentBgm === this.preparedBgm && !this.currentBgm.paused) {
+            return;
+        }
+
+        this._ensureAudioContext();
+        this.resetBGM();
+
+        this.currentBgm = this.preparedBgm;
+        this.currentBgmFileName = this.preparedBgmFileName;
+
+        this.currentBgm.currentTime = 0;
+        this.currentBgm.volume = 0.7 * this.bgmVolume;
+        
+        this.setupAnalyserBridge(this.currentBgm);
+
+        this.currentBgm.onended = () => {
+            console.log(`[Audio] BGM ended: ${this.currentBgmFileName}`);
+            if (typeof this.onBGMEnded === 'function') {
+                this.onBGMEnded();
+            }
+        };
+        this.currentBgm.play().catch(e => console.warn("[Audio] Autoplay blocked or audio not ready", e));
+    }
+
+
     resetBGM() {
         if (this.fadeInterval) {
             clearInterval(this.fadeInterval);
@@ -378,14 +373,13 @@ export class AudioManager {
         }
         Object.values(this.bgms).forEach(b => {
             b.pause();
-            b.volume = 0.7 * this.bgmVolume; // 🌟 リセット時も掛け算の状態を維持
+            b.volume = 0.7 * this.bgmVolume;
             b.onended = null;
         });
         this.currentBgm = null;
         this.currentBgmFileName = "";
     }
 
-    /** BGMフェードアウト */
     fadeOutBGM(duration = 2000) {
         if (!this.currentBgm || this.fadeInterval) return;
 
@@ -408,10 +402,10 @@ export class AudioManager {
     }
 
     _playSE(key) {
+        this._ensureAudioContext();
         const baseAudio = this.sounds[key];
         if (baseAudio) {
             const clone = baseAudio.cloneNode(true);
-            // 🌟 クローン再生する際も、現在の掛け算済みの最新音量をそのまま引き継ぐ
             clone.volume = baseAudio.volume;
             clone.play().catch(() => {});
             
@@ -435,15 +429,15 @@ export class AudioManager {
     async playBGMByIndex(idx) {
         const bgmData = this.DYNAMIC_BGM_LIST[idx];
         if (!bgmData) return;
-        const fileName = bgmData.fileName;
-        
-        await this.loadStageBGM(fileName);
-        
-        if (this.bgms[fileName]) {
-            this.bgms[fileName].loop = false;
+
+        const audio = await this.loadStageBGM(bgmData.fileName, bgmData.stagePath);
+
+        if (audio) {
+            audio.loop = true; // サウンドテスト用ループ再生
         }
-        
-        this.playBGM(fileName);
+
+        // loadStageBGM で準備された BGM を再生
+        this.playBGM();
     }
     
     getByteFrequencyData() {

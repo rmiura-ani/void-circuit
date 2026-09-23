@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-3 固有のザコ・中型敵クラス群
@@ -15,7 +18,7 @@
 /**
  * 1. WindSlicer: 画面左右の外側から超高速で水平横断する風切りストライカー
  */
-class WindSlicerEnemy extends Enemy {
+export class WindSlicerEnemy extends Enemy {
     get imageName() { return "enemy_wind_slicer.webp"; }
 
     constructor(game, x, y, bulletType, isLeftToRight = true) {
@@ -43,7 +46,7 @@ class WindSlicerEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const isLeft = data.isLeft !== undefined ? data.isLeft : true;
         return new WindSlicerEnemy(game, x, y, bType, isLeft);
     }
@@ -52,7 +55,7 @@ class WindSlicerEnemy extends Enemy {
 /**
  * 2. CloudLurker: 雲の中に隠れて半透明で出現し、射撃時のみ実体化（グラフィック明瞭化）する奇襲機
  */
-class CloudLurkerEnemy extends Enemy {
+export class CloudLurkerEnemy extends Enemy {
     get imageName() { return "enemy_cloud_lurker.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -89,7 +92,7 @@ class CloudLurkerEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new CloudLurkerEnemy(game, x, y, bType);
     }
 }
@@ -97,7 +100,7 @@ class CloudLurkerEnemy extends Enemy {
 /**
  * 3. GaleArtillery: 画面上部に陣取り、強風（自機を横へ押し流す風圧効果）を発生させる固定砲台
  */
-class GaleArtilleryEnemy extends Enemy {
+export class GaleArtilleryEnemy extends Enemy {
     get imageName() { return "enemy_gale_artillery.webp"; }
 
     constructor(game, x, y, bulletType, stopY = 80) {
@@ -148,7 +151,7 @@ class GaleArtilleryEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new GaleArtilleryEnemy(game, x, y, bType, data.stopY || 80);
     }
 }
@@ -156,7 +159,7 @@ class GaleArtilleryEnemy extends Enemy {
 /**
  * 4. SkyFalcon: 自機の上空に漂い、自機が直下に重なった瞬間に超高速で垂直急降下（ダイブ）するドッグファイト機
  */
-class SkyFalconEnemy extends Enemy {
+export class SkyFalconEnemy extends Enemy {
     get imageName() { return "enemy_sky_falcon.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -204,7 +207,7 @@ class SkyFalconEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new SkyFalconEnemy(game, x, y, bType);
     }
 }
@@ -212,7 +215,7 @@ class SkyFalconEnemy extends Enemy {
 /**
  * 5. AegisCruiser: 両脇に小型ビット（護衛機）を連れて現れる大型巡洋機
  */
-class AegisCruiserEnemy extends Enemy {
+export class AegisCruiserEnemy extends Enemy {
     get imageName() { return "enemy_aegis_cruiser.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -240,7 +243,7 @@ class AegisCruiserEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new AegisCruiserEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -256,7 +259,7 @@ class AegisCruiserEnemy extends Enemy {
  * STAGE-3 ボス: 蒼穹龍神（BossEnemy_03）
  * 特徴: ハイスピードなS字蛇行と、ブラススタブ（キメ音）と同調した急降下突撃を放つドラゴンボス
  */
-class BossEnemy_03 extends BossEnemy {
+export class BossEnemy_03 extends BossEnemy {
     get imageName() { return "enemy_boss_03.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -329,18 +332,20 @@ class BossEnemy_03 extends BossEnemy {
     }
 
     onDie(game) {
-        for (let i = 0; i < 12; i++) {
-            setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
-                    { maxHp: 100 }
-                );
-            }, i * 100);
+        if (game.collisions) {
+            for (let i = 0; i < 12; i++) {
+                setTimeout(() => {
+                    game.collisions.createExplosion(
+                        this.x + Math.random() * this.width, 
+                        this.y + Math.random() * this.height, 
+                        { maxHp: 100 }
+                    );
+                }, i * 100);
+            }
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_03(
             game, x, y, 
             data.hp || 70, 
@@ -355,13 +360,9 @@ class BossEnemy_03 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('wind_slicer', WindSlicerEnemy);
-    ENEMY_REGISTRY.set('cloud_lurker', CloudLurkerEnemy);
-    ENEMY_REGISTRY.set('gale_artillery', GaleArtilleryEnemy);
-    ENEMY_REGISTRY.set('sky_falcon', SkyFalconEnemy);
-    ENEMY_REGISTRY.set('aegis_cruiser', AegisCruiserEnemy);
-    ENEMY_REGISTRY.set('boss_03', BossEnemy_03);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('wind_slicer', WindSlicerEnemy);
+ENEMY_REGISTRY.set('cloud_lurker', CloudLurkerEnemy);
+ENEMY_REGISTRY.set('gale_artillery', GaleArtilleryEnemy);
+ENEMY_REGISTRY.set('sky_falcon', SkyFalconEnemy);
+ENEMY_REGISTRY.set('aegis_cruiser', AegisCruiserEnemy);
+ENEMY_REGISTRY.set('boss_03', BossEnemy_03);

@@ -8,6 +8,8 @@
  * Note: Included assets are the property of their respective owners.
  */
 
+import { createEnemyInstance } from '../entities/enemy.js'; 
+
 /**
  * ScenarioManager 敵キャラシナリオ管理
  */
@@ -57,7 +59,8 @@ export class ScenarioManager {
     }
 
     async loadStageResources(stageNum, assetManager, audioManager, assetBase) {
-        const fileName = `stage-${stageNum}/scenario.yaml`;
+        const stagePath = `stage-${stageNum}`;
+        const fileName = `${stagePath}/scenario.yaml`;
         const scenarioPath = `${assetBase}${fileName}`;
         
         // ✨ 新しいロードが始まるので、前回の残ったエラーをクリアする
@@ -94,7 +97,6 @@ export class ScenarioManager {
             const finalImages = [...new Set(imagesToPreload)];
             if (finalImages.length > 0) {
                 try {
-                    const stagePath = `stage-${stageNum}`;
                     await assetManager.preload(finalImages,stagePath); 
                 } catch (assetError) {
                     // 💡 画像ロード自体のエラーをラップして原因を絞り込む
@@ -105,7 +107,7 @@ export class ScenarioManager {
             // 6. 既存の AudioManager を使ってBGMをロード
             if (this.bgm) {
                 try {
-                    await audioManager.loadStageBGM(this.bgm);
+                    await audioManager.loadStageBGM(this.bgm,stagePath);
                 } catch (audioError) {
                     throw new Error(`BGM load failed: "${this.bgm}"`);
                 }

@@ -1,21 +1,30 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * game.js - ゲーム全体を統括するメインクラス（エンディング枠超え演出拡張版）
- * * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * game.js - ゲーム全体を統括するメインクラス
+ *
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+
 import { ScenarioManager } from './systems/scenario.js';
+import { AssetManager } from './entities/base.js';
+import './entities/enemies/index.js'; // これ1つで全ステージの敵がレジストリに登録される
 import { GameUIManager } from './game-ui.js';
 import { GameCollisionManager } from './game-collision.js';
-
+import { Player, Bullet } from './entities/player.js';
+import { Enemy, EnemyBullet } from './entities/enemy.js';
+import { Particle, ScoreText } from './entities/effects.js';
 /**
  * ゲーム全体を統括するメインクラス
  */
 export class Game {
+    /**
+     * @param {Object} controller - SystemController への参照
+     */
     constructor(controller) {
-        this.sc = controller; // SystemControllerへの参照
+        this.sc = controller;
         this.canvas = controller.canvas;
         this.ctx = this.canvas.getContext('2d');
         this.background = new BackgroundManager(GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
@@ -37,20 +46,22 @@ export class Game {
         this._boundMouseDown = (e) => this.handleMouseDown(e);
     }
 
-    // --- スコア・ライフ制御（UI更新は game-ui.js へ委譲） ---
+    // --- Getter / Setter ---
+
+    get score() { return this._score; }
     set score(val) {
         this._score = val;
         this.ui.updateScoreUI();
     }
-    get score() { return this._score; }
 
+    get currentLives() { return this._lives; }
     set currentLives(val) {
         this._lives = val;
         this.ui.updateLivesUI();
     }
-    get currentLives() { return this._lives; }
 
-    // --- ゲームフロー制御 ---
+    // --- パブリックメソッド（ゲームフロー制御） ---
+
     /** 初期化 */
     reset() {
         this._score = 0;
@@ -84,14 +95,12 @@ export class Game {
         this.escTimer = null;
 
         this.entities = [];
-        this.particles = [];
-        this.scoreTexts = [];
         this.player = new Player(this, this.sc.input, 0, 0);
         this.player.x = GAME_CONFIG.WIDTH / 2 - this.player.halfWidth;
         this.player.y = GAME_CONFIG.HEIGHT - GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET;
 
         this.scenario.reset();
-        if (this.sc.audio) this.sc.audio.resetBGM();
+        this.sc.audio?.resetBGM();
     }
 
     /** ゲーム開始 */
@@ -136,7 +145,7 @@ export class Game {
             
             if (success) {
                 this.background.setup(this.scenario.bgColor, stageNum); 
-                if (this.sc.audio) this.sc.audio.playBGM(this.scenario.bgm);
+                this.sc.audio?.playBGM();
                 
                 if (this.missionConfig) {
                     this.missionConfig.missionName = this.sc.tag;
@@ -155,43 +164,10 @@ export class Game {
         }
     }
 
-    /** キー入力 */
-    handleKeyDown(e) {
-        if (!this.isRunning) return;
-        if (e.key === 'Escape') this.handleEmergencyEscape();
-    }
-
-    /** マウス入力 */
-    handleMouseDown(e) { }
-
-    /** ESC連打でゲーム終了 */
-    handleEmergencyEscape() {
-        if (this.escTimer) clearTimeout(this.escTimer);
-
-        this.escCount++;
-        this.ui.visualEffectWarning(); 
-
-        if (this.escCount >= 2) {
-            this.escCount = 0;
-            this.escTimer = null;
-            
-            this.currentLives = 0;
-            this.gameOverTimer = 180;
-            if (this.player.alive) this.onPlayerMiss(); 
-            if (this.sc.audio) this.sc.audio.fadeOutBGM(1000);
-            this.endSession("EMERGENCY EXIT");
-        } else {
-            this.escTimer = setTimeout(() => {
-                this.escCount = 0;
-                this.escTimer = null;
-            }, 1000);
-        }
-    }
-
-    /** メインループ表示更新 */
+    /** メインループ更新 */
     update() {
         this.background.update(this.frame);
- 
+
         if (!this.isRunning) return;
 
         this.frame++;
@@ -216,40 +192,23 @@ export class Game {
                 this.respawnTimer = 0;
             }
         }
+
         if (!this.player.alive && this.currentLives <= 0) {
             this.gameOverTimer++;
             if (this.gameOverTimer > 180) {
                 this.endSession("GAME OVER");
             }
         }
+
         this.updateEntities();
-        this.updateScoreTexts();
         this.ui.updateDebugInfo(); 
     }
 
-    /** エンティティ更新 */
+    /** エンティティ更新（一括処理） */
     updateEntities() {
-        ([...this.entities, ...this.particles]).forEach(e => e.update(this));
+        // VC固有のスタイルとして一括処理スタイルを維持
+        ([...this.entities]).forEach(e => e.update(this));
         this.entities = this.entities.filter(e => e.active);
-        this.particles = this.particles.filter(e => e.active);
-    }
-
-    /** 敵スコアテキスト更新 */
-    updateScoreTexts() {
-        for (let i = this.scoreTexts.length - 1; i >= 0; i--) {
-            this.scoreTexts[i].update();
-            if (this.scoreTexts[i].isDead) {
-                this.scoreTexts.splice(i, 1);
-            }
-        }
-    }
-
-    /** 操作モードの動的記録 */
-    updateInputMode() {
-        if (this.stats.inputMode === 'BOTH') return;
-        const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
-        if (this.stats.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.stats.inputMode = 'BOTH';
-        else if (this.stats.inputMode === 'MOUSE' && isKeyActive) this.stats.inputMode = 'BOTH';
     }
 
     /** ボス戦スタート */
@@ -268,13 +227,14 @@ export class Game {
         if (isEnemyAllKilled && !this.isCleared) {
             this.postBossTimer++;
 
-            const isEffectsFinished = (this.particles.length === 0 && this.scoreTexts.length === 0);
+            // エンティティの存在を確認
+            const isEffectsFinished = (this.entities.length === 0);
             const isTimeout = (this.postBossTimer >= 150);
 
             if (isEffectsFinished || isTimeout) {
                 this.isCleared = true;
                 this.clearTimer = 0; 
-                if (this.sc.audio) this.sc.audio.fadeOutBGM(3000); 
+                this.sc.audio?.fadeOutBGM(3000); 
                 console.log(`[System] All effects finished at frame ${this.postBossTimer}. Stage Cleared.`);
             }
         }
@@ -298,30 +258,30 @@ export class Game {
         this.clearTimer = 0;
         this.frame = 0; 
         
-        const success = await this.initStage(this.currentStageNum);
-        if (!success) return; 
+        await this.initStage(this.currentStageNum);
     }
 
     /** 被弾ミス */
     onPlayerMiss() {
         if (!this.player.alive) return;
 
-        if (this.sc.audio) this.sc.audio.playExplosion();
+        this.sc.audio?.playExplosion();
         const px = this.player.x + this.player.halfWidth;
         const py = this.player.y + this.player.halfHeight;
         for (let i = 0; i < 30; i++) {
-            this.particles.push(new Particle(px, py, 'player'));
+            this.entities.push(new Particle(px, py, 'player'));
         }
 
-        if (this.isInvincibleCheat){
+        if (this.isInvincibleCheat) {
             this.player.setInvincible();
             return;
         }
+
         this.player.alive = false;
         this.respawnTimer = 0;      
         this.currentLives--;
-        if (this.currentLives <= 0 && this.sc.audio) {
-            this.sc.audio.fadeOutBGM();
+        if (this.currentLives <= 0) {
+            this.sc.audio?.fadeOutBGM();
         }
     }
 
@@ -342,27 +302,24 @@ export class Game {
         
         if (!this.player) return;
 
-        // 弾やエフェクト
+        // 弾やエフェクトの描画
         this.entities.forEach(e => { if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx); });
-        this.particles.forEach(p => p.draw(this.ctx));
 
-        // 敵・ボス
+        // 敵・ボスの描画
         this.entities.forEach(e => { if (e instanceof Enemy && !e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
         this.entities.forEach(e => { if (e instanceof Enemy && e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
 
-        // ★ 3. 敵（Enemy）でも弾（Bullet）でもない一般的な Entity（WarningEffect など）を描画
+        // 一般的な Entity（WarningEffect や ScoreText など）を描画
         this.entities.forEach(e => {
             if (!(e instanceof Enemy) && !(e instanceof Bullet) && !(e instanceof EnemyBullet)) {
                 e.draw(this.ctx);
             }
         });
 
-
-        // テキスト・自機
-        this.scoreTexts.forEach(st => st.draw(this.ctx));
+        // 自機描画
         this.player.draw(this.ctx);
 
-        // UIオーバーレイ（UIコンポーネントへ委譲）
+        // UIオーバーレイ
         this.ui.drawOverlayMessages(this.ctx);
     }
 
@@ -389,5 +346,48 @@ export class Game {
         
         this.sc.showStartScreen(msg, isNew);
         this.sc.startIdleTimer();
+    }
+
+    // --- プライベート・内部処理用メソッド ---
+
+    /** キー入力ハンドラ */
+    handleKeyDown(e) {
+        if (!this.isRunning) return;
+        if (e.key === 'Escape') this.handleEmergencyEscape();
+    }
+
+    /** マウス入力ハンドラ */
+    handleMouseDown(e) { }
+
+    /** ESC連打でゲーム終了 */
+    handleEmergencyEscape() {
+        if (this.escTimer) clearTimeout(this.escTimer);
+
+        this.escCount++;
+        this.ui.visualEffectWarning(); 
+
+        if (this.escCount >= 2) {
+            this.escCount = 0;
+            this.escTimer = null;
+            
+            this.currentLives = 0;
+            this.gameOverTimer = 180;
+            if (this.player.alive) this.onPlayerMiss(); 
+            this.sc.audio?.fadeOutBGM(1000);
+            this.endSession("EMERGENCY EXIT");
+        } else {
+            this.escTimer = setTimeout(() => {
+                this.escCount = 0;
+                this.escTimer = null;
+            }, 1000);
+        }
+    }
+
+    /** 操作モードの動的記録 */
+    updateInputMode() {
+        if (this.stats.inputMode === 'BOTH') return;
+        const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
+        if (this.stats.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.stats.inputMode = 'BOTH';
+        else if (this.stats.inputMode === 'MOUSE' && isKeyActive) this.stats.inputMode = 'BOTH';
     }
 }

@@ -7,6 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+"use strict";
+
+import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-2 固有のザコ・中型敵クラス群
@@ -15,12 +18,12 @@
 /**
  * 1. AquaJet: 画面上部から急降下し、滑らかなS字軌道（水流）を描いて離脱する高速機
  */
-class AquaJetEnemy extends Enemy {
+export class AquaJetEnemy extends Enemy {
     get imageName() { return "enemy_aqua_jet.webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 1); // HP = 1
-        this.width = (541/1247)*32;
+        this.width = (541 / 1247) * 32;
         this.height = 40;
         this.baseX = x;
         this.speed = 3.8;
@@ -46,7 +49,7 @@ class AquaJetEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new AquaJetEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -56,12 +59,12 @@ class AquaJetEnemy extends Enemy {
 /**
  * 2. WaveSpreader: 画面中央に滞留し、水面の波紋（サイン波）のように広がる波状弾幕を放射する砲台機
  */
-class WaveSpreaderEnemy extends Enemy {
+export class WaveSpreaderEnemy extends Enemy {
     get imageName() { return "enemy_wave_spreader.webp"; }
 
     constructor(game, x, y, bulletType, stopY = 110) {
         super(game, x, y, bulletType, 3); // HP = 3
-        this.width = (1408/768)*32;
+        this.width = (1408 / 768) * 32;
         this.height = 32;
         this.stopY = stopY;
         this.timer = 0;
@@ -117,7 +120,7 @@ class WaveSpreaderEnemy extends Enemy {
         });
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new WaveSpreaderEnemy(game, x, y, bType, data.stopY || 110);
     }
 }
@@ -125,7 +128,7 @@ class WaveSpreaderEnemy extends Enemy {
 /**
  * 3. BubbleMine: ふわふわ降下する水泡トラップ。被弾・撃破時に「小さな泡（8方向拡散）」を発散する
  */
-class BubbleMineEnemy extends Enemy {
+export class BubbleMineEnemy extends Enemy {
     get imageName() { return "enemy_bubble_mine.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -170,7 +173,7 @@ class BubbleMineEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BubbleMineEnemy(game, x, y, bType);
     }
 }
@@ -178,7 +181,7 @@ class BubbleMineEnemy extends Enemy {
 /**
  * 4. VortexDiver: 自機を目掛けて斜め急降下し、画面下部で旋回（Vortex）して上昇離脱する中型機
  */
-class VortexDiverEnemy extends Enemy {
+export class VortexDiverEnemy extends Enemy {
     get imageName() { return "enemy_vortex_diver.webp"; }
 
     constructor(game, x, y, bulletType) {
@@ -220,7 +223,7 @@ class VortexDiverEnemy extends Enemy {
 
                 // 【アニメーション処理】10フレームかけて 1.0 から -1.0 までなめらかに補間してひっくり返す
                 if (this.flipScaleY > -1.0) {
-                    this.flipScaleY -= 0.2; // 値を小さくするとゆっくり回ります
+                    this.flipScaleY -= 0.2;
                     if (this.flipScaleY < -1.0) this.flipScaleY = -1.0;
                 }
 
@@ -252,13 +255,13 @@ class VortexDiverEnemy extends Enemy {
         // 2. スケール適用後の中心点（0, 0）を描画の基準にするため原点を戻す
         ctx.translate(-this.x, -this.y);
 
-        // 3. 親クラスの描画処理をそのまま実行（this.x, this.y を汚さない！）
+        // 3. 親クラスの描画処理をそのまま実行
         super.draw(ctx, isInvincibleCheat);
 
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new VortexDiverEnemy(game, x, y, bType);
     }
 }
@@ -266,13 +269,13 @@ class VortexDiverEnemy extends Enemy {
 /**
  * 5. CoralShield: サンゴの堅牢な外殻を持つ高耐久機。真下へ太い自機狙い連続弾を射出しながらゆっくり降下
  */
-class CoralShieldEnemy extends Enemy {
+export class CoralShieldEnemy extends Enemy {
     get imageName() { return "enemy_coral_shield.webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 6); // 高耐久 HP = 6
         this.width = 48;
-        this.height = (1408/768)*48;
+        this.height = (1408 / 768) * 48;
         this.speed = 0.5; // 超鈍重
         this.timer = 0;
     }
@@ -297,7 +300,7 @@ class CoralShieldEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         const enemy = new CoralShieldEnemy(game, x, y, bType);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
@@ -313,7 +316,7 @@ class CoralShieldEnemy extends Enemy {
  * STAGE-2 ボス: 碧琥珀の潜航母艦（BossEnemy_02）
  * 特徴: 潜航（水没・半透明化＆無敵）と浮上（全方位弾幕）を繰り返すトリッキーな水棲母艦ボス
  */
-class BossEnemy_02 extends BossEnemy {
+export class BossEnemy_02 extends BossEnemy {
     get imageName() { return "enemy_boss_02.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
@@ -368,8 +371,9 @@ class BossEnemy_02 extends BossEnemy {
                     this.isInvincible = true; // 水中に潜りきったら無敵化
                     
                     // 水中でランダムな位置へワープ移動
+                    const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : (game.width || 320);
                     const padding = 50;
-                    this.x = padding + Math.random() * (GAME_CONFIG.WIDTH - this.width - padding * 2);
+                    this.x = padding + Math.random() * (gameWidth - this.width - padding * 2);
                     this.baseX = this.x;
 
                     // 次のステートへ移動してタイマーリセット
@@ -381,7 +385,6 @@ class BossEnemy_02 extends BossEnemy {
             case 'SURFACE':
                 // 2. 120フレーム（2秒間）は水中で潜航維持（タイマーカウント）
                 if (this.timer < 120) {
-                    // 水中潜航中（alphaは0.2のまま維持）
                     break;
                 }
 
@@ -419,16 +422,18 @@ class BossEnemy_02 extends BossEnemy {
         // 水中母艦が水圧と爆破で崩壊していく連鎖大爆発演出
         for (let i = 0; i < 8; i++) {
             setTimeout(() => {
-                game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
-                    { maxHp: 80 }
-                );
+                if (game.collisions) {
+                    game.collisions.createExplosion(
+                        this.x + Math.random() * this.width, 
+                        this.y + Math.random() * this.height, 
+                        { maxHp: 80 }
+                    );
+                }
             }, i * 150);
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new BossEnemy_02(
             game, x, y, 
             data.hp || 50, 
@@ -443,13 +448,9 @@ class BossEnemy_02 extends BossEnemy {
 // 3. ENEMY_REGISTRY への自動登録
 // ==========================================
 
-if (typeof ENEMY_REGISTRY !== 'undefined') {
-    ENEMY_REGISTRY.set('aqua_jet', AquaJetEnemy);
-    ENEMY_REGISTRY.set('wave_spreader', WaveSpreaderEnemy);
-    ENEMY_REGISTRY.set('bubble_mine', BubbleMineEnemy);
-    ENEMY_REGISTRY.set('vortex_diver', VortexDiverEnemy);
-    ENEMY_REGISTRY.set('coral_shield', CoralShieldEnemy);
-    ENEMY_REGISTRY.set('boss_02', BossEnemy_02);
-} else {
-    console.error('[Enemy Registry Error] ENEMY_REGISTRY is not defined. Make sure EnemyBase.js is loaded first.');
-}
+ENEMY_REGISTRY.set('aqua_jet', AquaJetEnemy);
+ENEMY_REGISTRY.set('wave_spreader', WaveSpreaderEnemy);
+ENEMY_REGISTRY.set('bubble_mine', BubbleMineEnemy);
+ENEMY_REGISTRY.set('vortex_diver', VortexDiverEnemy);
+ENEMY_REGISTRY.set('coral_shield', CoralShieldEnemy);
+ENEMY_REGISTRY.set('boss_02', BossEnemy_02);

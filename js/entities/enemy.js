@@ -1,13 +1,16 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/EnemyBase.js - 敵クラス・ボス基底クラス & レジストリシステム
+ * entities/enemy.js - 敵クラス・ボス基底クラス & レジストリシステム
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 "use strict";
+
+import { Entity } from './base.js';
+import { WarningEffect } from './effects.js';
 
 // ==========================================
 // 1. 全敵クラス動的自動登録レジストリ (ENEMY_REGISTRY)
@@ -16,14 +19,14 @@
 /**
  * 敵タイプ名（'straight', 'boss_01' 等）とクラス定義を1対1でマッピングするグローバルマップ
  */
-const ENEMY_REGISTRY = new Map();
+export const ENEMY_REGISTRY = new Map();
 
 
 // ==========================================
 // 2. 敵キャラクター抽象基底クラス (Enemy)
 // ==========================================
 
-class Enemy extends Entity {
+export class Enemy extends Entity {
     constructor(game, x, y, bulletType, hp = 1) {
         super(x, y, 32, 32);
         this.game = game;
@@ -174,7 +177,7 @@ class Enemy extends Entity {
         }
     }
 
-    static create(game, x, y, bType, data) {
+    static create(game, x, y, bType, data = {}) {
         return new Enemy(game, x, y, bType, data.hp || 1);
     }
 }
@@ -184,7 +187,7 @@ class Enemy extends Entity {
 // 3. ボスキャラクター抽象基底クラス (BossEnemy)
 // ==========================================
 
-class BossEnemy extends Enemy {
+export class BossEnemy extends Enemy {
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
         const bulletType = "aim";
         super(game, x, y, bulletType, hp);
@@ -194,42 +197,14 @@ class BossEnemy extends Enemy {
     }
 }
 
-
 // ==========================================
-// 4. 特殊イベント用ダミー敵 (BossTriggerEnemy)
-// ==========================================
-
-class BossTriggerEnemy extends Enemy {
-    constructor(game, x, y, bType, data) {
-        super(game, x, y, bType, 1);
-        this.width = 0;
-        this.height = 0;
-    }
-
-    update(game) {
-        this.active = false;
-    }
-
-    draw(ctx) {
-        // 画面上には描画しない
-    }
-
-    static create(game, x, y, bType, data) {
-        return new BossTriggerEnemy(game, x, y, bType, data);
-    }
-}
-
-ENEMY_REGISTRY.set("BOSS_TRIGGER", BossTriggerEnemy);
-
-
-// ==========================================
-// 5. データ駆動型ファクトリ関数 (createEnemyInstance)
+// 4. データ駆動型ファクトリ関数 (createEnemyInstance)
 // ==========================================
 
 /**
- * レジストリを経由して動的に敵インスタンスを生成する
+ * レジストリを経由して動的に敵インスタンス（または演出）を生成する
  */
-function createEnemyInstance(type, game, x, y, bType, data = {}) {
+export function createEnemyInstance(type, game, x, y, bType, data = {}) {
     if (type === 'BOSS_TRIGGER') {
         return new WarningEffect(game, x, y, data);
     }
@@ -246,4 +221,33 @@ function createEnemyInstance(type, game, x, y, bType, data = {}) {
     }
 
     return new Enemy(game, x, y, bType, data.hp || 1);
+}
+
+/**
+ * 敵の弾クラス
+ */
+export class EnemyBullet extends Entity {
+    constructor(x, y, vx, vy) {
+        super(x, y, 4, 4); // 判定は 4x4
+        this.vx = vx;
+        this.vy = vy;
+        this.renderRadius = 3; // 見た目の半径は 3（直径6）
+    }
+
+    /** 敵弾の移動更新と画面外判定 */
+    update(game) {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.isOutOfBounds(50)) {
+            this.active = false;
+        }
+    }
+
+    /** 敵弾を描画する */
+    draw(ctx) {
+        ctx.fillStyle = '#F0F';
+        ctx.beginPath();
+        ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.renderRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
