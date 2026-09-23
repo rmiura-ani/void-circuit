@@ -350,6 +350,14 @@ export class Game {
         this.entities.forEach(e => { if (e instanceof Enemy && !e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
         this.entities.forEach(e => { if (e instanceof Enemy && e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
 
+        // ★ 3. 敵（Enemy）でも弾（Bullet）でもない一般的な Entity（WarningEffect など）を描画
+        this.entities.forEach(e => {
+            if (!(e instanceof Enemy) && !(e instanceof Bullet) && !(e instanceof EnemyBullet)) {
+                e.draw(this.ctx);
+            }
+        });
+
+
         // テキスト・自機
         this.scoreTexts.forEach(st => st.draw(this.ctx));
         this.player.draw(this.ctx);

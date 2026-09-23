@@ -230,6 +230,9 @@ ENEMY_REGISTRY.set("BOSS_TRIGGER", BossTriggerEnemy);
  * レジストリを経由して動的に敵インスタンスを生成する
  */
 function createEnemyInstance(type, game, x, y, bType, data = {}) {
+    if (type === 'BOSS_TRIGGER') {
+        return new WarningEffect(game, x, y, data);
+    }
     const EnemyClass = ENEMY_REGISTRY.get(type);
 
     if (EnemyClass) {
