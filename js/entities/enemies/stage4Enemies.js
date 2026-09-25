@@ -22,9 +22,9 @@ export class DustScoutEnemy extends Enemy {
     get imageName() { return "enemy_dust_scout.webp"; }
 
     constructor(game, x, y, bulletType) {
-        // 画面最下部からスポーン
-        const startY = game.height + 32;
-        super(game, x, startY, bulletType, 1); // HP = 1
+        // 引数 y が明示されていない場合は画面最下部からスポーン
+        const spawnY = (y !== undefined && y !== null) ? y : game.height + 32;
+        super(game, x, spawnY, bulletType, 1); // HP = 1
         this.speedY = -2.5; // 上昇移動
         this.hasShot = false;
     }
@@ -79,8 +79,9 @@ export class RelicPrismEnemy extends Enemy {
                 this.timer++;
                 this.rotationAngle += 0.05; // 幾何学的な回転
 
-                // 50Fごとにクロス（4方向）弾幕を回転角をずらしながら発射
-                if (this.timer % Math.floor(50 / this.fireRateMultiplier) === 0) {
+                // 連射間隔がゼロ以下にならないよう Math.max(1, ...) で保護
+                const interval = Math.max(1, Math.floor(50 / (this.fireRateMultiplier || 1)));
+                if (this.timer % interval === 0) {
                     this.shootCrossBullet(game);
                 }
 
@@ -91,9 +92,6 @@ export class RelicPrismEnemy extends Enemy {
 
             case 'RETREAT':
                 this.y -= 2.0;
-                if (this.isOutOfBounds(50, true)) {
-                    this.active = false;
-                }
                 break;
         }
     }
@@ -140,9 +138,6 @@ export class MirageCrawlerEnemy extends Enemy {
             this.shoot(game);
         }
 
-        if (this.isOutOfBounds(50, true)) {
-            this.active = false;
-        }
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -167,12 +162,9 @@ export class SandPillarEnemy extends Enemy {
 
         this.y += this.speedY;
 
-        if (this.isOutOfBounds(70, true)) {
-            this.active = false;
-        }
     }
 
-    /** 砂の防壁：正面からのヒット時にダメージを半減させる */
+    /** 砂の防壁：ダメージ軽減処理 */
     takeDamage(amount) {
         const reducedAmount = Math.max(1, Math.floor(amount * 0.5));
         return super.takeDamage(reducedAmount);
@@ -230,21 +222,18 @@ export class GigaOrbEnemy extends Enemy {
 
             case 'RETREAT':
                 this.y -= 2.0;
-                if (this.isOutOfBounds(60, true)) {
-                    this.active = false;
-                }
                 break;
         }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx) {
         ctx.save();
         // チャージ中は激しく赤黄色に点滅発光する演出
         if (this.state === 'CHARGE') {
             const glow = Math.sin(this.timer * 0.3) * 0.5 + 0.5;
             ctx.filter = `brightness(${1.0 + glow * 1.5}) saturate(${1.0 + glow * 2.0})`;
         }
-        super.draw(ctx, isInvincibleCheat);
+        super.draw(ctx);
         ctx.restore();
     }
 
@@ -268,8 +257,10 @@ export class BossEnemy_04 extends BossEnemy {
     get imageName() { return "enemy_boss_04.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
+        // 出現位置は引数の y または画面外上部 (-128)
+        const startY = (y !== undefined && y !== null) ? y : -128;
+        super(game, x, startY, hp, timeLimit, timeMultiplier);
+        
         this.isBoss = true;
         this.width = 128;
         this.height = 128;

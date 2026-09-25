@@ -11,71 +11,149 @@
 
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
+/**
+ * 状態定数
+ */
+const BOSS_STATE = {
+    ENTRANCE: "ENTRANCE",
+    BATTLE: "BATTLE",
+    ESCAPE: "ESCAPE"
+};
+
 // ========================================================
 // BossEnemy_01 (アイアン・ヴェイン防衛コア)
 // ========================================================
 export class BossEnemy_01 extends BossEnemy {
-    constructor(game, x, y, hp = 500, timeLimit = 1800, timeMultiplier = 100) {
-        // BossEnemy(game, x, y, hp, timeLimit, timeMultiplier) を呼び出し
-        super(game, x, y, hp, timeLimit, timeMultiplier);
+    get imageName() { return "enemy_boss_01.webp"; }
+
+    /**
+     * @param {Object} game - ゲームインスタンス
+     * @param {number} x - 初期X座標
+     * @param {number} y - 初期Y座標
+     * @param {number} hp - 耐久力
+     */
+    constructor(game, x, y, hp = 500) {
+        super(game, x, y, hp);
         
         this.width = 96;
         this.height = 80;
+        
+        // 移動・演出関連
         this.stopY = 90;
-        this.state = "ENTRANCE"; // ENTRANCE, BATTLE, ESCAPE
+        this.state = BOSS_STATE.ENTRANCE;
         this.frame = 0;
         this.startX = x;
+        this.entranceSpeed = 1.5;
+        this.swingWidth = 60;   // 左右の揺れ幅
+        this.swingSpeed = 0.02; // 左右の揺れ速度
     }
 
-    /** ボス用画像のファイル名指定 */
-    get imageName() { 
-        return "enemy_boss_01.webp"; 
+    /** ボスの中心X座標 */
+    get centerX() {
+        return this.x + this.width / 2;
     }
 
+    /** ボスの中心Y座標 */
+    get centerY() {
+        return this.y + this.height / 2;
+    }
+
+    /**
+     * メイン更新処理
+     */
     update(game) {
         this.frame++;
 
-        // 1. 登場フェーズ
-        if (this.state === "ENTRANCE") {
-            if (this.y < this.stopY) {
-                this.y += 1.5;
-            } else {
-                this.state = "BATTLE";
-            }
-            return;
+        switch (this.state) {
+            case BOSS_STATE.ENTRANCE:
+                this.updateEntrance();
+                break;
+
+            case BOSS_STATE.BATTLE:
+                this.updateBattle(game);
+                break;
+
+            case BOSS_STATE.ESCAPE:
+                // 将来的な撤退処理用
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /**
+     * 1. 登場フェーズ更新
+     */
+    updateEntrance() {
+        if (this.y < this.stopY) {
+            this.y += this.entranceSpeed;
+        } else {
+            this.state = BOSS_STATE.BATTLE;
+        }
+    }
+
+    /**
+     * 2. 戦闘フェーズ更新（移動＋攻撃）
+     */
+    updateBattle(game) {
+        // 左右の揺動移動
+        const gameWidth = (typeof GAME_CONFIG !== 'undefined' && game.width) ? game.width : 320;
+        const baseCenterX = (gameWidth - this.width) / 2;
+        this.x = baseCenterX + Math.sin(this.frame * this.swingSpeed) * this.swingWidth;
+
+        // 弾幕パターンA: 120フレーム毎 全方位8方向弾
+        if (this.frame % 120 === 0) {
+            this.fireRingBullets(game, 8, 3);
         }
 
-        // 2. 戦闘フェーズ（左右移動 ＋ 周期弾幕）
-        if (this.state === "BATTLE") {
-            const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : 320;
-
-            // 左上原点基準で左右にゆらゆら揺れる
-            this.x = (gameWidth / 2 - this.width / 2) + Math.sin(this.frame * 0.02) * 60;
-
-            // 弾幕パターンA (120フレーム毎に全方位8方向弾)
-            if (this.frame % 120 === 0) {
-                const bx = this.x + this.width / 2;
-                const by = this.y + this.height / 2;
-                for (let i = 0; i < 8; i++) {
-                    const a = (Math.PI * 2 / 8) * i;
-                    game.entities.push(new EnemyBullet(bx, by, Math.cos(a) * 3, Math.sin(a) * 3));
-                }
-            }
-
-            // 弾幕パターンB (HP 50%未満で自機狙い2連射)
-            if (this.hp < this.maxHp * 0.5 && this.frame % 40 === 0 && game.player) {
-                const bx = this.x + this.width / 2;
-                const by = this.y + this.height / 2;
-                
-                // 自機への角度計算
-                const targetX = game.player.x + game.player.width / 2;
-                const targetY = game.player.y + game.player.height / 2;
-                const angle = Math.atan2(targetY - by, targetX - bx);
-
-                game.entities.push(new EnemyBullet(bx - 20, by, Math.cos(angle) * 4, Math.sin(angle) * 4));
-                game.entities.push(new EnemyBullet(bx + 20, by, Math.cos(angle) * 4, Math.sin(angle) * 4));
-            }
+        // 弾幕パターンB: HP 50%未満かつ40フレーム毎 自機狙い2連射
+        const isSecondPhase = this.hp < this.maxHp * 0.5;
+        if (isSecondPhase && this.frame % 40 === 0 && game.player) {
+            this.fireTargetedDualBullets(game, game.player, 4, 20);
         }
+    }
+
+    /**
+     * 【弾幕A】 全方位リング弾を発射
+     * @param {Object} game - ゲームインスタンス
+     * @param {number} count - 弾数
+     * @param {number} speed - 弾速
+     */
+    fireRingBullets(game, count = 8, speed = 3) {
+        const cx = this.centerX;
+        const cy = this.centerY;
+        const step = (Math.PI * 2) / count;
+
+        for (let i = 0; i < count; i++) {
+            const angle = step * i;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            game.entities.push(new EnemyBullet(cx, cy, vx, vy));
+        }
+    }
+
+    /**
+     * 【弾幕B】 自機を狙った左右並列2連射
+     * @param {Object} game - ゲームインスタンス
+     * @param {Object} target - ターゲット（プレイヤー）
+     * @param {number} speed - 弾速
+     * @param {number} offsetX - X方向のオフセット間隔
+     */
+    fireTargetedDualBullets(game, target, speed = 4, offsetX = 20) {
+        const cx = this.centerX;
+        const cy = this.centerY;
+
+        const targetCx = target.x + target.width / 2;
+        const targetCy = target.y + target.height / 2;
+        
+        const angle = Math.atan2(targetCy - cy, targetCx - cx);
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+
+        // 左右2箇所から発射
+        game.entities.push(new EnemyBullet(cx - offsetX, cy, vx, vy));
+        game.entities.push(new EnemyBullet(cx + offsetX, cy, vx, vy));
     }
 
     /** 
@@ -86,9 +164,7 @@ export class BossEnemy_01 extends BossEnemy {
             game, 
             x, 
             y, 
-            data.hp || 500, 
-            data.timeLimit || 1800, 
-            data.timeMultiplier || 100
+            data.hp ?? 500
         );
     }
 }
@@ -97,4 +173,3 @@ export class BossEnemy_01 extends BossEnemy {
 // ENEMY_REGISTRY へのボス登録
 // ========================================================
 ENEMY_REGISTRY.set("boss_01", BossEnemy_01);
-ENEMY_REGISTRY.set("BOSS_01", BossEnemy_01); // 大文字小文字両対応

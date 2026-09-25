@@ -28,10 +28,29 @@ export class StraightEnemy extends Enemy {
         this.speed = StraightEnemy.DEFAULT_SPEED; 
     }
 
+    update(game) {
+        if (!this.active) return;
+
+        // 直進移動
+        this.y += this.speed;
+
+        // 射撃判定
+        const isInFiringRange = this.y > 20 && this.y < 475;
+        if (isInFiringRange) {
+            this.shootTimer++;
+            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+            if (this.shootTimer >= currentInterval) {
+                this.shoot(game);
+                this.shootTimer = 0;
+            }
+        }
+    }
+
     static create(game, x, y, bType, data = {}) {
         return new StraightEnemy(game, x, y, bType, data.hp ?? 1);
     }
 }
+
 
 /**
  * SineEnemy: サイン波移動型。横揺れしながら降下する
@@ -48,12 +67,27 @@ export class SineEnemy extends Enemy {
         this.phase = phase;
         this.amplitude = SineEnemy.DEFAULT_AMPLITUDE;
         this.frequency = SineEnemy.DEFAULT_FREQUENCY;
+        this.speedY = 2.0;
     }
 
     update(game) {
-        super.update(game);
+        if (!this.active) return;
+
+        // サイン波移動
+        this.y += this.speedY;
         this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
         this.phase += this.frequency;
+
+        // 射撃判定
+        const isInFiringRange = this.y > 20 && this.y < 475;
+        if (isInFiringRange) {
+            this.shootTimer++;
+            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+            if (this.shootTimer >= currentInterval) {
+                this.shoot(game);
+                this.shootTimer = 0;
+            }
+        }
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -63,6 +97,7 @@ export class SineEnemy extends Enemy {
         return enemy;
     }
 }
+
 
 /**
  * StationaryEnemy: 画面内の指定位置まで降りて静止し、弾を撒いて去っていく設置型
@@ -78,35 +113,41 @@ export class StationaryEnemy extends Enemy {
         this.baseX = x;
         this.stopY = stopY;
         this.waitTime = waitTime;
-        this.timer = 0;
+        this.stateTimer = 0;
         this.state = 'MOVE_IN';
+        this.baseShootInterval = 30; // 設置型のデフォルト発射間隔
     }
 
     update(game) {
         if (!this.active) return;
 
+        // 状態別移動ロジック
         switch (this.state) {
             case 'MOVE_IN':
                 this.y += 2;
                 if (this.y >= this.stopY) this.state = 'STOP';
                 break;
 
-            case 'STOP': {
-                this.timer++;
-                this.x = this.baseX + Math.sin(this.timer * 0.2) * 2;
+            case 'STOP':
+                this.stateTimer++;
+                this.x = this.baseX + Math.sin(this.stateTimer * 0.2) * 2;
 
-                const interval = Math.max(10, Math.floor(30 / (this.fireRateMultiplier || 1)));
-                if (this.timer % interval === 0) {
+                // 静止中のみ射撃タイマー更新
+                this.shootTimer++;
+                const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+                if (this.shootTimer >= currentInterval) {
                     this.shoot(game);
+                    this.shootTimer = 0;
                 }
 
-                if (this.timer >= this.waitTime) this.state = 'MOVE_OUT';
+                // 待機時間が終わったら撤退状態へ
+                if (this.stateTimer >= this.waitTime) {
+                    this.state = 'MOVE_OUT';
+                }
                 break;
-            }
 
             case 'MOVE_OUT':
                 this.y -= 3;
-                if (this.isOutOfBounds(50, true)) this.active = false;
                 break;
         }
     }
@@ -120,6 +161,7 @@ export class StationaryEnemy extends Enemy {
         );
     }
 }
+
 
 /**
  * AssaultEnemy: 直進後、自機の高度に合わせて急激に軌道修正して体当たりを狙う突撃型
@@ -142,7 +184,8 @@ export class AssaultEnemy extends Enemy {
         this.x += this.vx;
         this.y += this.vy;
 
-        if (this.state === 'FALL' && game.player?.alive) {
+        // 自機の位置に合わせて突撃開始
+        if (this.state === 'FALL' && game?.player?.alive) {
             if (this.y >= game.player.y - 150) {
                 this.state = 'CHARGE';
                 const dx = game.player.x - this.x;
@@ -155,16 +198,13 @@ export class AssaultEnemy extends Enemy {
                 game.sc?.audio?.playHitSound?.(); 
             }
         }
-
-        if (this.y > game.height + 50 || this.x < -50 || this.x > game.width + 50) {
-            this.active = false;
-        }
     }
 
     static create(game, x, y, bType, data = {}) {
         return new AssaultEnemy(game, x, y, bType);
     }
 }
+
 
 /**
  * HunterEnemy: 執拗に自機のX座標を追従しながら降下してくるハンター型
@@ -176,16 +216,16 @@ export class HunterEnemy extends Enemy {
         super(game, x, y, bulletType, 2); 
         this.speedY = 1.0; 
         this.speedX = 1.5; 
-        this.timer = 0;
+        this.baseShootInterval = 80;
     }
 
     update(game) {
         if (!this.active) return;
-        this.timer++;
 
         this.y += this.speedY;
 
-        if (game.player?.alive) {
+        // X軸追従
+        if (game?.player?.alive) {
             const targetX = game.player.x;
             if (this.x < targetX) {
                 this.x = Math.min(this.x + this.speedX, targetX);
@@ -194,17 +234,23 @@ export class HunterEnemy extends Enemy {
             }
         }
 
-        if (this.timer % 80 === 0) {
-            this.shoot(game);
+        // 射撃処理
+        const isInFiringRange = this.y > 20 && this.y < 475;
+        if (isInFiringRange) {
+            this.shootTimer++;
+            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
+            if (this.shootTimer >= currentInterval) {
+                this.shoot(game);
+                this.shootTimer = 0;
+            }
         }
-
-        if (this.y > game.height + 50) this.active = false;
     }
 
     static create(game, x, y, bType, data = {}) {
         return new HunterEnemy(game, x, y, bType);
     }
 }
+
 
 /**
  * ShieldEnemy: 高耐久の盾。正面から弾を受けると「撃ち返し（カウンター）」を発生させる
@@ -217,8 +263,14 @@ export class ShieldEnemy extends Enemy {
         this.speedY = 0.6; 
     }
 
+    update(game) {
+        if (!this.active) return;
+        this.y += this.speedY;
+    }
+
     takeDamage(amount) {
         const isDead = super.takeDamage(amount);
+        // ダメージを受けるたびにカウンター弾発射
         if (!isDead && this.game) {
             this.game.entities.push(
                 new EnemyBullet(this.x + this.width / 2, this.y + this.height, 0, 3)
@@ -231,6 +283,7 @@ export class ShieldEnemy extends Enemy {
         return new ShieldEnemy(game, x, y, bType);
     }
 }
+
 
 /**
  * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
@@ -249,18 +302,15 @@ export class ScoutEnemy extends Enemy {
 
     update(game) {
         if (!this.active) return;
-        this.timer += 0.04;
 
+        this.timer += 0.04;
         this.x += this.isLeft ? 3.5 : -3.5;
         this.y = 80 + Math.sin(this.timer) * 120;
 
+        // U字最下点付近で1回だけ射撃
         if (Math.abs(this.timer - Math.PI / 2) < 0.05 && !this.hasShot) {
             this.shoot(game); 
             this.hasShot = true;
-        }
-
-        if (this.x < -60 || this.x > game.width + 60) {
-            this.active = false;
         }
     }
 
@@ -291,13 +341,13 @@ export class RockEnemy extends Enemy {
     update(game) {
         if (!this.active) return;
         this.y += this.speedY;
-        if (this.isOutOfBounds(50, true)) this.active = false;
     }
 
     static create(game, x, y, bType, data = {}) {
         return new RockEnemy(game, x, y, bType, data.speedY ?? RockEnemy.DEFAULT_SPEED_Y);
     }
 }
+
 
 /**
  * MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
@@ -315,11 +365,10 @@ export class MineDebrisEnemy extends Enemy {
     update(game) {
         if (!this.active) return;
         this.y += this.speedY;
-        if (this.isOutOfBounds(50, true)) this.active = false;
     }
 
-    /** 完全無敵（ダメージ無効化） */
     takeDamage(_amount) {
+        // 完全無敵
         return false;
     }
 
@@ -327,6 +376,7 @@ export class MineDebrisEnemy extends Enemy {
         return new MineDebrisEnemy(game, x, y, bType, data.speedY ?? MineDebrisEnemy.DEFAULT_SPEED_Y);
     }
 }
+
 
 /**
  * WormSegment: 連結エネミー（多関節）の胴体パーツ
@@ -347,6 +397,7 @@ export class WormSegment extends Enemy {
 
     update(game) {
         if (!this.active) return;
+
         if (this.head?.active) {
             this.y = this.head.y - (this.index * WormSegment.SEGMENT_SPACING);
             this.x = this.head.x;
@@ -368,6 +419,7 @@ export class WormSegment extends Enemy {
         this.onDie(this.game, true);
     }
 }
+
 
 /**
  * WormEnemy: 連結エネミー（頭部）
@@ -395,7 +447,6 @@ export class WormEnemy extends Enemy {
     update(game) {
         if (!this.active) return;
         this.y += this.speedY;
-        if (this.isOutOfBounds(100, true)) this.active = false;
     }
 
     removeSegment(seg) {
@@ -429,29 +480,13 @@ export class WormEnemy extends Enemy {
 // ==========================================
 // 3. ENEMY_REGISTRY への動的自動登録
 // ==========================================
-
-if (ENEMY_REGISTRY) {
-    if (typeof ENEMY_REGISTRY.set === 'function') {
-        ENEMY_REGISTRY.set('straight', StraightEnemy);
-        ENEMY_REGISTRY.set('sine', SineEnemy);
-        ENEMY_REGISTRY.set('stationary', StationaryEnemy);
-        ENEMY_REGISTRY.set('assault', AssaultEnemy);
-        ENEMY_REGISTRY.set('hunter', HunterEnemy);
-        ENEMY_REGISTRY.set('shield', ShieldEnemy);
-        ENEMY_REGISTRY.set('scout', ScoutEnemy);
-        ENEMY_REGISTRY.set('rock', RockEnemy);
-        ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
-        ENEMY_REGISTRY.set('worm', WormEnemy);
-    } else {
-        ENEMY_REGISTRY['straight'] = StraightEnemy;
-        ENEMY_REGISTRY['sine'] = SineEnemy;
-        ENEMY_REGISTRY['stationary'] = StationaryEnemy;
-        ENEMY_REGISTRY['assault'] = AssaultEnemy;
-        ENEMY_REGISTRY['hunter'] = HunterEnemy;
-        ENEMY_REGISTRY['shield'] = ShieldEnemy;
-        ENEMY_REGISTRY['scout'] = ScoutEnemy;
-        ENEMY_REGISTRY['rock'] = RockEnemy;
-        ENEMY_REGISTRY['debris'] = MineDebrisEnemy;
-        ENEMY_REGISTRY['worm'] = WormEnemy;
-    }
-}
+ENEMY_REGISTRY.set('straight', StraightEnemy);
+ENEMY_REGISTRY.set('sine', SineEnemy);
+ENEMY_REGISTRY.set('stationary', StationaryEnemy);
+ENEMY_REGISTRY.set('assault', AssaultEnemy);
+ENEMY_REGISTRY.set('hunter', HunterEnemy);
+ENEMY_REGISTRY.set('shield', ShieldEnemy);
+ENEMY_REGISTRY.set('scout', ScoutEnemy);
+ENEMY_REGISTRY.set('rock', RockEnemy);
+ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
+ENEMY_REGISTRY.set('worm', WormEnemy);

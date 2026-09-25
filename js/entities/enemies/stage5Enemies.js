@@ -37,9 +37,6 @@ export class CellMiniEnemy extends Enemy {
         // 慣性で徐々に真下への降下軌道にシフト
         this.vy = Math.min(2.5, this.vy + 0.05);
 
-        if (this.isOutOfBounds(40, true)) {
-            this.active = false;
-        }
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -61,10 +58,6 @@ export class CellMitosisEnemy extends Enemy {
     update(game) {
         if (!this.active) return;
         this.y += this.speedY;
-
-        if (this.isOutOfBounds(50, true)) {
-            this.active = false;
-        }
     }
 
     /** 撃破時に2体に「細胞分裂」して左右へ弾き出す */
@@ -117,20 +110,16 @@ export class PulseSporeEnemy extends Enemy {
         } else if (this.scale < 1.2) {
             this.hasPulsed = false; // 次の膨張ピークに向けてフラグリセット
         }
-
-        if (this.isOutOfBounds(50, true)) {
-            this.active = false;
-        }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx) {
         ctx.save();
         // 脈動に合わせて画像の描画スケールを動的に変更
         ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
         ctx.scale(this.scale, this.scale);
         ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
 
-        super.draw(ctx, isInvincibleCheat);
+        super.draw(ctx);
         ctx.restore();
     }
 
@@ -164,10 +153,6 @@ export class BioTentacleEnemy extends Enemy {
             this.bulletType = 'aim';
             this.shoot(game);
         }
-
-        if (this.isOutOfBounds(60, true)) {
-            this.active = false;
-        }
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -176,7 +161,7 @@ export class BioTentacleEnemy extends Enemy {
 }
 
 /**
- * 4. LeechParasite: 自機に向かって超低速で寄生飛行。接触すると被弾ダメージではなく「一定時間連射速度低下」を付与
+ * 4. LeechParasite: 自機に向かって超低速で寄生飛行。
  */
 export class LeechParasiteEnemy extends Enemy {
     get imageName() { return "enemy_leech_parasite.webp"; }
@@ -184,6 +169,7 @@ export class LeechParasiteEnemy extends Enemy {
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 1); // HP = 1
         this.speed = 1.2;
+        this.isParasite = true; // 衝突判定側でデバフ処理を分岐するためのフラグ例
     }
 
     update(game) {
@@ -199,10 +185,6 @@ export class LeechParasiteEnemy extends Enemy {
             this.y += (dy / dist) * this.speed;
         } else {
             this.y += this.speed;
-        }
-
-        if (this.isOutOfBounds(50, true)) {
-            this.active = false;
         }
     }
 
@@ -236,14 +218,11 @@ export class HeartNucleusEnemy extends Enemy {
             this.hp = Math.min(this.maxHp, this.hp + 1);
         }
 
-        // 射撃は高密度の全方位弾
-        if (this.timer % Math.floor(80 / this.fireRateMultiplier) === 0) {
+        // 射撃は高密度の全方位弾（1未満にならないように保護）
+        const interval = Math.max(1, Math.floor(80 / (this.fireRateMultiplier || 1)));
+        if (this.timer % interval === 0) {
             this.bulletType = 'eight-way';
             this.shoot(game);
-        }
-
-        if (this.isOutOfBounds(60, true)) {
-            this.active = false;
         }
     }
 
@@ -267,8 +246,9 @@ export class BossEnemy_05 extends BossEnemy {
     get imageName() { return "enemy_boss_05.webp"; }
 
     constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
+        const startY = (y !== undefined && y !== null) ? y : -128;
+        super(game, x, startY, hp, timeLimit, timeMultiplier);
+        
         this.isBoss = true;
         this.width = 110;
         this.height = 110;
@@ -299,8 +279,9 @@ export class BossEnemy_05 extends BossEnemy {
                 this.x = this.baseX + Math.sin(this.timer * 0.02) * 60;
                 this.y = 60 + Math.cos(this.timer * 0.04) * 20;
 
-                // 粘着質なシンセアルペジオと同調した自機狙い連射弾
-                if (this.timer % Math.floor(15 / this.fireRateMultiplier) === 0) {
+                // 粘着質なシンセアルペジオと同調した自機狙い連射弾（ゼロ除算保護）
+                const interval = Math.max(1, Math.floor(15 / (this.fireRateMultiplier || 1)));
+                if (this.timer % interval === 0) {
                     this.bulletType = 'aim';
                     this.shoot(game);
                 }
@@ -319,7 +300,7 @@ export class BossEnemy_05 extends BossEnemy {
         }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx) {
         ctx.save();
         // 分裂（暴走）後は不気味な紫色に輝き、激しく脈動（スケール変化）する
         if (this.hasSplit) {
@@ -329,7 +310,7 @@ export class BossEnemy_05 extends BossEnemy {
             ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
             ctx.filter = 'hue-rotate(280deg) saturate(2.5) brightness(1.1)';
         }
-        super.draw(ctx, isInvincibleCheat);
+        super.draw(ctx);
         ctx.restore();
     }
 

@@ -27,37 +27,19 @@ export class Entity {
     }
 
     /**
-     * 画面外および座標異常の共通判定
-     * @param {number} margin 通常エンティティの画面外許容マージン
-     * @param {boolean} isEnemy 敵固有のトリッキーな移動（左右・上への一時アウト）を許容するか
-     * @returns {boolean} 排除すべき対象（画面外・異常値）ならtrue
+     * 共通の画面外判定（弾や通常エフェクト用）
+     * @param {number} margin 許容マージン
      */
-    isOutOfBounds(margin, isEnemy = false) {
-        // 🛑 【最優先セーフティ】座標が NaN になったら無条件で即時排除
-        if (Number.isNaN(this.x) || Number.isNaN(this.y)) {
-            return true;
-        }
+    isOutOfBounds(margin = 32) {
+        // 🛑 【最優先セーフティ】NaN ガード
+        if (Number.isNaN(this.x) || Number.isNaN(this.y)) return true;
 
-        const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : 800;
-        const gameHeight = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.HEIGHT : 600;
+        // 🛑 【プレイヤー保護】Playerは画面外判定で絶対消さない
+        if (this.constructor && this.constructor.name === 'Player') return false;
 
-        // 🛑 【敵専用ロジック】トリッキーな動きをする敵の場合
-        if (isEnemy) {
-            // 1. 下方向に完全に突き抜けたら消滅
-            if (this.y > gameHeight) {
-                return true;
-            }
+        const gameWidth = typeof GAME_CONFIG !== 'undefined' ? game.width : 800;
+        const gameHeight = typeof GAME_CONFIG !== 'undefined' ? game.height : 600;
 
-            // 2. 画面外から戻ってくる動きを許容しつつ、絶対に戻ってこれない領域（3000px）に暴走した場合は強制排除
-            const ABSOLUTE_LIMIT = 3000;
-            if (this.x < -ABSOLUTE_LIMIT || this.x > ABSOLUTE_LIMIT || this.y < -ABSOLUTE_LIMIT) {
-                return true;
-            }
-
-            return false;
-        }
-
-        // 🛑 【通常ロジック】自機、自機弾、敵弾などは四方のマージンを越えたら即消滅
         return (
             this.y > gameHeight + margin || 
             this.y < -margin || 

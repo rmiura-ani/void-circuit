@@ -32,10 +32,6 @@ export class Bullet extends Entity {
     update() {
         this.x += this.vx; 
         this.y += this.vy; 
-
-        if (this.isOutOfBounds(20)) {
-            this.active = false;
-        }
     }
 
     draw(ctx) {
@@ -73,6 +69,9 @@ export class Player extends Entity {
         this.shotCooldown = 0;             // 連射制限用クールダウンタイマー
         this.weaponSwitchReady = true;     // Xキーの押しっぱなしによる高速連打防止フラグ
 
+        this.windForceX = 0;               // 風圧による横方向の力
+        this.mouseWindOffset = 0;          // マウス/タッチ操作時の風圧蓄積オフセット
+
         this.image = new Image();
         this.image.onload = () => {
             this.isLoaded = true;
@@ -84,7 +83,7 @@ export class Player extends Entity {
     get centerX() { return this.x + this.halfWidth; }
     get centerY() { return this.y + this.halfHeight; }    
 
-    setInvincible(frames = GAME_CONFIG.PLAYER_SPAWN_INVINCIBLE_TIME) { 
+    setInvincible(frames) { 
         this._invincibleTimer = frames; 
     }
     get isInvincible() { return this._invincibleTimer > 0; }
@@ -117,19 +116,93 @@ export class Player extends Entity {
         if (this.shotCooldown > 0) this.shotCooldown--;
 
         // 1. キーボード操作による移動
-        if (this.input.isPressed('ArrowUp') && this.y > 0) this.y -= this.speed;
-        if (this.input.isPressed('ArrowDown') && this.y < ch - this.height) this.y += this.speed;
-        if (this.input.isPressed('ArrowLeft') && this.x > 0) this.x -= this.speed;
-        if (this.input.isPressed('ArrowRight') && this.x < cw - this.width) this.x += this.speed;
+        if (this.input.isPressed('ArrowUp')) this.y -= this.speed;
+        if (this.input.isPressed('ArrowDown')) this.y += this.speed;
+        if (this.input.isPressed('ArrowLeft')) this.x -= this.speed;
+        if (this.input.isPressed('ArrowRight')) this.x += this.speed;
 
-        // 2. タッチ操作による移動（スマートフォン等の慣性付き移動）
+        // 2. タッチ/マウス操作
         if (this.input.isTouching && this.input.touchX !== null) {
+            // ドラッグ継続中：風圧の蓄積＆ずれ移動（_handleTouchMove 内で mouseWindOffset を加算）
             this._handleTouchMove(this.input.touchX, this.input.touchY, cw, ch);
+        } else {
+            // 💡 指/マウスボタンを離した瞬間、蓄積された風圧ズレを完全リセット！
+            this.mouseWindOffset = 0;
+
+            // キーボード操作等のために風圧を直接加算
+            this.x += this.windForceX;
         }
 
-        // 3. 武器換装とショット自動生成の内部処理
+        // 3. 風圧を使い切ったのでリセット
+        this.windForceX = 0;
+
+        // 4. 画面外はみ出し防止の一括強制クランプ（キー移動・タッチ・風圧等の全移動結果の安全ガード）
+        this._clampPosition(cw, ch);
+
+        // 5. 武器換装とショット自動生成の内部処理
         this._handleWeaponSwitch(this.input);
         this._handleShooting(this.input);
+    }
+
+    /** 自機位置を画面領域内に強制クランプする（半身はみ出し許容） */
+    _clampPosition(cw, ch) {
+        const width = cw || (typeof GAME_CONFIG !== 'undefined' ? game.width : 320);
+        const height = ch || (typeof GAME_CONFIG !== 'undefined' ? game.height : 480);
+
+        // 最小値: -halfWidth (左/上に半身出る)
+        // 最大値: width - halfWidth (右/下に半身出る)
+        const minX = -this.halfWidth;
+        const maxX = width - this.halfWidth;
+        const minY = -this.halfHeight;
+        const maxY = height - this.halfHeight;
+
+        this.x = Math.max(minX, Math.min(maxX, this.x));
+        this.y = Math.max(minY, Math.min(maxY, this.y));
+    }
+
+    /** タッチ/マウス入力時の慣性＆バウンス付き移動を計算する */
+    _handleTouchMove(tx, ty, cw, ch) {
+        // 🌪️ 風圧がある場合、そのままの風量をオフセットに蓄積（1.0〜1.5程度で十分効きます）
+        if (this.windForceX !== 0) {
+            this.mouseWindOffset += this.windForceX * 1.2;
+
+            // 🛑 暴走防止：ずれる最大値（上限）を制限する（例: 画面幅の 40% まで）
+            const maxOffset = cw * 0.4;
+            this.mouseWindOffset = Math.max(-maxOffset, Math.min(maxOffset, this.mouseWindOffset));
+        }
+
+        // 基準の目標位置（カーソル位置）に、蓄積されたズレを加算
+        const targetX = (tx - this.width / 2) + this.mouseWindOffset;
+        const targetY = ty - this.height / 2;
+        
+        const vx = (targetX - this.x) * 0.2;
+        const vy = (targetY - this.y) * 0.2;
+        
+        this.x += vx;
+        this.y += vy;
+
+        // 🏀 半身出しの限界位置を基準にしてバウンス（反発）を計算
+        const bounce = 0.6;
+        const minX = -this.halfWidth;
+        const maxX = cw - this.halfWidth;
+        const minY = -this.halfHeight;
+        const maxY = ch - this.halfHeight;
+
+        if (this.x < minX) { 
+            this.x = minX; 
+            this.x += Math.abs(vx) * bounce; 
+        } else if (this.x > maxX) { 
+            this.x = maxX; 
+            this.x -= Math.abs(vx) * bounce; 
+        }
+
+        if (this.y < minY) { 
+            this.y = minY; 
+            this.y += Math.abs(vy) * bounce; 
+        } else if (this.y > maxY) { 
+            this.y = maxY; 
+            this.y -= Math.abs(vy) * bounce; 
+        }
     }
 
     /** 武器換装ロジック（Xキー）*/
@@ -181,27 +254,6 @@ export class Player extends Entity {
                 this.game.sc.audio.playShot();
             }
         }
-    }
-
-    /** タッチ入力時の慣性付き移動を計算する */
-    _handleTouchMove(tx, ty, cw, ch) {
-        const targetX = tx - this.width / 2;
-        const targetY = ty - this.height / 2;
-        const vx = (targetX - this.x) * 0.2;
-        const vy = (targetY - this.y) * 0.2;
-        
-        this.x += vx;
-        this.y += vy;
-
-        const bounce = 0.6;
-        const limitX = cw - this.width / 2;
-        const limitY = ch - this.height / 2;
-        const minPos = -this.width / 2;
-
-        if (this.x < minPos) { this.x = minPos; this.x += Math.abs(vx) * bounce; }
-        else if (this.x > limitX) { this.x = limitX; this.x -= Math.abs(vx) * bounce; }
-        if (this.y < minPos) { this.y = minPos; this.y += Math.abs(vy) * bounce; }
-        else if (this.y > limitY) { this.y = limitY; this.y -= Math.abs(vy) * bounce; }
     }
 
     /** プレイヤーを描画する（無敵状態では点滅する）*/

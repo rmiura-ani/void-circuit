@@ -135,7 +135,7 @@ export class GameUIManager {
         if (boss && this.game.bossStartTime > 0 && bonusEl) {
             const elapsed = this.game.frame - this.game.bossStartTime;
             const remaining = Math.max(0, boss.timeLimit - elapsed);
-            bonusEl.innerText = `${remaining}F (${(remaining / GAME_CONFIG.FPS).toFixed(2)}s)`;
+            bonusEl.innerText = `${remaining}F (${(remaining / this.game.fps).toFixed(2)}s)`;
             bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
         } else if (bonusEl) {
             bonusEl.innerText = "---";
@@ -278,19 +278,19 @@ export class GameUIManager {
                     if (this.game.frame <= 25) kvAlpha = this.game.frame / 25;
                     else if (this.game.frame > (kvDuration - 45)) kvAlpha = Math.max(0, (kvDuration - this.game.frame) / 45);
 
-                    const baseWidth = GAME_CONFIG.WIDTH;
-                    const baseHeight = kvImage.height * (GAME_CONFIG.WIDTH / kvImage.width);
+                    const baseWidth = this.game.width;
+                    const baseHeight = kvImage.height * (this.game.width / kvImage.width);
                     const scale = 1.12 - (progress * 0.12); 
                     const drawWidth = baseWidth * scale;
                     const drawHeight = baseHeight * scale;
-                    const drawX = (GAME_CONFIG.WIDTH - drawWidth) / 2;
-                    const drawY = (GAME_CONFIG.HEIGHT * 0.35) - (drawHeight / 2);
+                    const drawX = (this.game.width - drawWidth) / 2;
+                    const drawY = (this.game.height * 0.35) - (drawHeight / 2);
 
                     ctx.save();
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.globalAlpha = kvAlpha * 0.6;
                     ctx.fillStyle = '#000000';
-                    ctx.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+                    ctx.fillRect(0, 0, this.game.width, this.game.height);
                     ctx.restore();
 
                     ctx.globalCompositeOperation = 'screen';
@@ -301,32 +301,32 @@ export class GameUIManager {
             }
 
             // ステージ名テキストの描画（画像ロード前でも文字は正しくフェードイン表示される）
-            const textCenterY = GAME_CONFIG.HEIGHT * 0.65;
+            const textCenterY = this.game.height * 0.65;
             ctx.font = '16px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha})`;
-            ctx.fillText(`STAGE ${this.game.currentStageNum}`, GAME_CONFIG.WIDTH / 2, textCenterY);
+            ctx.fillText(`STAGE ${this.game.currentStageNum}`, this.game.width / 2, textCenterY);
             
             ctx.font = '11px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha})`;
-            ctx.fillText(this.game.scenario.stageName, GAME_CONFIG.WIDTH / 2, textCenterY + 30);
+            ctx.fillText(this.game.scenario.stageName, this.game.width / 2, textCenterY + 30);
         }
 
         // 💀 3. ゲームオーバー演出 (通常時のみ)
         if (!this.game.player.alive && this.game.currentLives <= 0) {
             ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.fillRect(0, GAME_CONFIG.HEIGHT / 2 - 50, GAME_CONFIG.WIDTH, 100);
+            ctx.fillRect(0, this.game.height / 2 - 50, this.game.width, 100);
             ctx.fillStyle = '#FFF';
-            ctx.fillText('GAME OVER', GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);
+            ctx.fillText('GAME OVER', this.game.width / 2, this.game.height / 2);
         }
 
         // 🌟 4. 通常のステージクリア演出 (STAGE 1〜6用)
         if (this.game.isCleared) {
             const stageNameStr = this.game.scenario.stageName; 
             ctx.fillStyle = '#0FF';
-            ctx.fillText(`STAGE ${this.game.currentStageNum} CLEAR`, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2);            
+            ctx.fillText(`STAGE ${this.game.currentStageNum} CLEAR`, this.game.width / 2, this.game.height / 2);            
             ctx.font = '10px "Press Start 2P", cursive';
             ctx.fillStyle = '#FFF';
-            ctx.fillText(stageNameStr, GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2 + 30);
+            ctx.fillText(stageNameStr, this.game.width / 2, this.game.height / 2 + 30);
         }
 
         ctx.restore();

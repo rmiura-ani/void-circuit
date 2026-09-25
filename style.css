@@ -220,6 +220,16 @@ canvas {
     margin-top: 20px;
 }
 
+#start-screen .controls-guide p {
+    margin-top: 19px;
+    color: #aaa;
+    text-align: left;
+    font-family: sans-serif;
+    margin: 3px 0;
+    font-size: 12px;
+}
+
+
 /* リザルト（結果）画面 */
 .mission-header {
     font-family: 'Courier New', monospace;

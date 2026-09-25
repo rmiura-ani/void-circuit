@@ -10,12 +10,15 @@
 
 import { ScenarioManager } from './systems/scenario.js';
 import { AssetManager } from './entities/base.js';
-import './entities/enemies/index.js'; // これ1つで全ステージの敵がレジストリに登録される
 import { GameUIManager } from './game-ui.js';
 import { GameCollisionManager } from './game-collision.js';
+
+import './entities/enemies/index.js'; // これ1つで全ステージの敵がレジストリに登録される
+
 import { Player, Bullet } from './entities/player.js';
 import { Enemy, EnemyBullet } from './entities/enemy.js';
 import { Particle, ScoreText } from './entities/effects.js';
+
 /**
  * ゲーム全体を統括するメインクラス
  */
@@ -27,7 +30,16 @@ export class Game {
         this.sc = controller;
         this.canvas = controller.canvas;
         this.ctx = this.canvas.getContext('2d');
-        this.background = new BackgroundManager(GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+
+        this.width = 320;
+        this.height = 480;
+        this.uiHeaderHeight = 40;
+        this.playerSpawnYOffset = 80;
+        this.playerSpawnWaitTime = 90;
+        this.playerSpawnInvincibleTime = 180;
+        this.fps = 60;
+
+        this.background = new BackgroundManager(this.width, this.height);
 
         this.scenario = new ScenarioManager();
         this.assets = new AssetManager(this.sc.assetBase);
@@ -96,8 +108,8 @@ export class Game {
 
         this.entities = [];
         this.player = new Player(this, this.sc.input, 0, 0);
-        this.player.x = GAME_CONFIG.WIDTH / 2 - this.player.halfWidth;
-        this.player.y = GAME_CONFIG.HEIGHT - GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET;
+        this.player.x = this.width / 2 - this.player.halfWidth;
+        this.player.y = this.height - this.playerSpawnYOffset;
 
         this.scenario.reset();
         this.sc.audio?.resetBGM();
@@ -171,7 +183,7 @@ export class Game {
         if (!this.isRunning) return;
 
         this.frame++;
-        this.player.update(GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+        this.player.update(this.width, this.height);
         this.scenario.update(this.frame, this);
 
         if (this.player.alive) {
@@ -187,7 +199,7 @@ export class Game {
         
         if (!this.player.alive && this.currentLives > 0) {
             this.respawnTimer++;
-            if (this.respawnTimer > GAME_CONFIG.PLAYER_SPAWN_WAIT_TIME) { 
+            if (this.respawnTimer > this.playerSpawnWaitTime) { 
                 this.respawnPlayer();
                 this.respawnTimer = 0;
             }
@@ -206,8 +218,20 @@ export class Game {
 
     /** エンティティ更新（一括処理） */
     updateEntities() {
-        // VC固有のスタイルとして一括処理スタイルを維持
-        ([...this.entities]).forEach(e => e.update(this));
+        const currentEntities = [...this.entities];
+
+        currentEntities.forEach(e => {
+            e.update(this);
+
+            // 画面外判定
+            if (e.active && typeof e.isOutOfBounds === 'function') {
+                if (e.isOutOfBounds()) {
+                    e.active = false;
+                }
+            }
+        });
+
+        // active なものだけ抽出してクリーンアップ
         this.entities = this.entities.filter(e => e.active);
     }
 
@@ -273,7 +297,7 @@ export class Game {
         }
 
         if (this.isInvincibleCheat) {
-            this.player.setInvincible();
+            this.player.setInvincible(this.playerSpawnInvincibleTime);
             return;
         }
 
@@ -287,17 +311,17 @@ export class Game {
 
     /** リスポーン */
     respawnPlayer() {
-        this.player.x = GAME_CONFIG.WIDTH / 2 - this.player.halfWidth;
-        this.player.y = GAME_CONFIG.HEIGHT - GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET;
+        this.player.x = this.width / 2 - this.player.halfWidth;
+        this.player.y = this.height - this.playerSpawnYOffset;
         this.player.alive = true;
-        this.player.setInvincible();
+        this.player.setInvincible(this.playerSpawnInvincibleTime);
     }
 
     /** 描画マスタ */
     draw() {
         // 通常のゲーム画面を黒クリア
         this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+        this.ctx.fillRect(0, 0, this.width, this.height);
         this.background.draw(this.ctx);
         
         if (!this.player) return;

@@ -59,10 +59,10 @@ export class GameCollisionManager {
             if (enemy.isInvincible) continue;
 
             if (
-                enemy.y + enemy.height < GAME_CONFIG.UI_HEADER_HEIGHT ||            
-                enemy.y >= GAME_CONFIG.HEIGHT ||          
+                enemy.y + enemy.height < this.game.uiHeaderHeight ||            
+                enemy.y >= this.game.height ||          
                 enemy.x + enemy.width <= 0 ||             
-                enemy.x >= GAME_CONFIG.WIDTH              
+                enemy.x >= this.game.width              
             ) {
                 continue;
             }
@@ -70,12 +70,19 @@ export class GameCollisionManager {
             for (const pBullet of playerBullets) {
                 if (!pBullet.active) continue;
                 if (!enemy.active) break;
-                if (this._isHit(pBullet, enemy)) {
+
+                // 🎯 衝突判定（マルチヒットボックス対応の _checkHitResult を使用）
+                const hitResult = this._checkHitResult(pBullet, enemy);
+
+                if (hitResult.hit) {
                     pBullet.active = false;
                     this.game.stats.shotsHit++;
 
-                    if (enemy.takeDamage(1)) {
-                        // 敵破壊処理
+                    const baseDamage = pBullet.damage || 1;
+                    const finalDamage = baseDamage * hitResult.multiplier;
+
+                    if (enemy.takeDamage(finalDamage)) {
+                        // 敵撃破処理
                         this.game.stats.enemiesKilled++;
                         this._calculateAttachScore(enemy);
                         if (typeof enemy.onDie === 'function') enemy.onDie(this.game);
@@ -94,20 +101,17 @@ export class GameCollisionManager {
                                     this.game.stats.enemiesKilled++;
                                     this._calculateAttachScore(e); // 密着ボーナス等のスコア計算
 
-                                    // 🛑 【最適化】画面内に見えている敵だけ派手に誘爆、上空の未出現は静かに処理
                                     const isVisible = (
-                                        e.y >= GAME_CONFIG.UI_HEADER_HEIGHT &&
-                                        e.y < GAME_CONFIG.HEIGHT &&
+                                        e.y >= this.game.uiHeaderHeight &&
+                                        e.y < this.game.height &&
                                         e.x >= 0 &&
-                                        e.x < GAME_CONFIG.WIDTH
+                                        e.x < this.game.width
                                     );
 
                                     if (isVisible) {
-                                        // 画面内の敵: 変数「e」のonDieを呼び出す (タイポ修正) / soundoff=trueで音を制御
                                         if (typeof e.onDie === 'function') e.onDie(this.game, true);
                                     }
                                     
-                                    // 処理済みの敵を即座に非アクティブ化し、次フレームでの多段多重処理を徹底防止
                                     e.active = false;
                                 }
                                 
@@ -121,15 +125,34 @@ export class GameCollisionManager {
                         }
                     } else {
                         // 敵ヒット処理
-                        const amount = 10;
+                        const amount = 10 * hitResult.multiplier; // 弱点ヒット時はヒット加算スコアも倍増
                         this.game.score += amount;
-                        if (this.game.sc.audio) this.game.sc.audio.playHitSound();
-                        this.game.entities.push(new Particle(pBullet.x, pBullet.y));
-                        // ボスだけ "+10" スコア演出                        
+
+                        // 弱点（倍率 1.0 超）と通常部分で演出・SEを分ける
+                        if (hitResult.multiplier > 1.0) {
+                            if (this.game.sc.audio) {
+                                // 弱点ヒット用音（無ければ既存音）
+                                if (typeof this.game.sc.audio.playCriticalHit === 'function') {
+                                    this.game.sc.audio.playCriticalHit();
+                                } else {
+                                    this.game.sc.audio.playHitSound();
+                                }
+                            }
+                            // 弱点ヒット時はパーティクルを多めに出す
+                            for (let i = 0; i < 3; i++) {
+                                this.game.entities.push(new Particle(pBullet.x, pBullet.y, 'critical'));
+                            }
+                        } else {
+                            if (this.game.sc.audio) this.game.sc.audio.playHitSound();
+                            this.game.entities.push(new Particle(pBullet.x, pBullet.y));
+                        }
+
+                        // ボスだけスコア演出
                         if (enemy.isBoss) {
                             const scatterX = (Math.random() - 0.5) * 10;
                             const scatterY = (Math.random() - 0.5) * 10;
-                            this.game.entities.push(new ScoreText(pBullet.x + scatterX, pBullet.y + scatterY, `+${amount}`, "#0FF"));
+                            const color = hitResult.multiplier > 1.0 ? "#FF0" : "#0FF"; // 弱点は黄色表示
+                            this.game.entities.push(new ScoreText(pBullet.x + scatterX, pBullet.y + scatterY, `+${amount}`, color));
                         }
                     }
                 }
@@ -143,6 +166,36 @@ export class GameCollisionManager {
         const dx = px - tx;
         const dy = py - ty;
         return (dx * dx + dy * dy) < radiusSq;
+    }
+
+    /**
+     * 弾と対象のヒット状態およびダメージ倍率を取得する
+     * マルチヒットボックス (getHitboxes) がある場合は各ボックスを判定
+     */
+    _checkHitResult(bullet, enemy) {
+        // 💡 対象（ボス等）が getHitboxes メソッドを持っている場合
+        if (typeof enemy.getHitboxes === 'function') {
+            const hitboxes = enemy.getHitboxes();
+            const bw = bullet.hitWidth ?? bullet.width;
+            const bh = bullet.hitHeight ?? bullet.height;
+            const bx = bullet.x + (bullet.width - bw) / 2;
+            const by = bullet.y + (bullet.height - bh) / 2;
+
+            for (const box of hitboxes) {
+                if (
+                    bx < box.x + box.width &&
+                    bx + bw > box.x &&
+                    by < box.y + box.height &&
+                    by + bh > box.y
+                ) {
+                    return { hit: true, multiplier: box.multiplier || 1.0, part: box.part };
+                }
+            }
+            return { hit: false, multiplier: 1.0 };
+        }
+
+        // 💡 通常判定（従来通りの AABB 判定）
+        return { hit: this._isHit(bullet, enemy), multiplier: 1.0 };
     }
 
     _isHit(r1, r2) {
@@ -182,7 +235,7 @@ export class GameCollisionManager {
             const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.game.score += bonus;
-                this.game.entities.push(new ScoreText(GAME_CONFIG.WIDTH / 2, GAME_CONFIG.HEIGHT / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+                this.game.entities.push(new ScoreText(game.width / 2, this.game.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
             }
         }
     }

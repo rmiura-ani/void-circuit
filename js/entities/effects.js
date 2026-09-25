@@ -213,13 +213,12 @@ export class WarningEffect extends Entity {
     /**
      * 描画処理
      * @param {CanvasRenderingContext2D} ctx 
-     * @param {boolean} isInvincibleCheat 
      */
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx) {
         if (!this.active) return;
 
-        const width = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : this.width;
-        const height = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.HEIGHT : this.height;
+        const width = typeof GAME_CONFIG !== 'undefined' ? game.width : this.width;
+        const height = typeof GAME_CONFIG !== 'undefined' ? game.height : this.height;
         const barHeight = 20; // 上下の警告バーの太さ
 
         ctx.save();
