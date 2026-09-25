@@ -27,7 +27,6 @@ export class BossEnemy_01 extends BossEnemy {
         this.width = 96;
         this.height = 80;
         
-         'NORMAL'; // NORMAL, DIVING, ASCENDING
         // 移動・演出関連
         this.stopY = 90;
         this.state = 'ENTRANCE'; // ENTRANCE, BATTLE
@@ -36,6 +35,9 @@ export class BossEnemy_01 extends BossEnemy {
         this.entranceSpeed = 1.5;
         this.swingWidth = 60;   // 左右の揺れ幅
         this.swingSpeed = 0.02; // 左右の揺れ速度
+
+        // 🎯 基準点となるX座標を追加
+        this.baseX = x;
     }
 
     /** ボスの中心X座標 */
@@ -75,7 +77,10 @@ export class BossEnemy_01 extends BossEnemy {
         if (this.y < this.stopY) {
             this.y += this.entranceSpeed;
         } else {
-            this.state = BOSS_STATE.BATTLE;
+            this.state = 'BATTLE';
+            // 🎯 BATTLE移行時にタイマーを0リセットし、登場完了時のX座標を基準位置に設定
+            this.frame = 0;
+            this.baseX = this.x;
         }
     }
 
@@ -83,10 +88,8 @@ export class BossEnemy_01 extends BossEnemy {
      * 2. 戦闘フェーズ更新（移動＋攻撃）
      */
     updateBattle(game) {
-        // 左右の揺動移動
-        const gameWidth = (typeof GAME_CONFIG !== 'undefined' && game.width) ? game.width : 320;
-        const baseCenterX = (gameWidth - this.width) / 2;
-        this.x = baseCenterX + Math.sin(this.frame * this.swingSpeed) * this.swingWidth;
+        // 🎯 到着位置(baseX)から滑らかに横揺れを開始 (frame=0から始まるため Math.sin(0)=0 でずれない)
+        this.x = this.baseX + Math.sin(this.frame * this.swingSpeed) * this.swingWidth;
 
         // 弾幕パターンA: 120フレーム毎 全方位8方向弾
         if (this.frame % 120 === 0) {

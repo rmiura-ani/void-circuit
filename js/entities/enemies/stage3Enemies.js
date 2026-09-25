@@ -278,13 +278,16 @@ export class BossEnemy_03 extends BossEnemy {
                 if (this.y >= 60) {
                     this.state = 'SINE_DRIVE';
                     this.timer = 0;
+                    // 🎯 到着時のX位置をベース座標に確定
+                    this.baseX = this.x;
                 }
                 break;
 
             case 'SINE_DRIVE':
                 // メタルの高速ベースラインに合わせたダイナミックなS字運動
+                // ※ timer=0 の時 cos(0)=1 となるため、Yの基準位置を 60 から調整 (90-30=60 からスタート)
                 this.x = this.baseX + Math.sin(this.timer * 0.06) * 100;
-                this.y = 60 + Math.cos(this.timer * 0.03) * 30;
+                this.y = 60 + (1 - Math.cos(this.timer * 0.03)) * 30; // 🎯 timer=0でy=60から滑らかにスタート
 
                 if (this.timer % 24 === 0) {
                     this.bulletType = 'triple';
@@ -311,11 +314,14 @@ export class BossEnemy_03 extends BossEnemy {
                 break;
 
             case 'RETREAT':
-                // 上空の定位置へと帰還
-                this.y -= 3.0;
-                this.x += (this.baseX - this.x) * 0.05;
-                if (this.y <= 60) {
+                // 上空の定位置へと帰還（x, y 共に強力かつ滑らかに目標点へ補間）
+                this.y += (60 - this.y) * 0.1; // 🎯 Y=60 目標へイージング帰還
+                this.x += (this.baseX - this.x) * 0.1; // 🎯 X=baseX 目標へ強力にイージング帰還
+
+                // 充分に目標地点に近付いたら切り替え（跳躍を防止）
+                if (Math.abs(this.y - 60) < 1.0 && Math.abs(this.x - this.baseX) < 1.0) {
                     this.y = 60;
+                    this.x = this.baseX;
                     this.state = 'SINE_DRIVE';
                     this.timer = 0;
                 }
@@ -332,7 +338,6 @@ export class BossEnemy_03 extends BossEnemy {
         );
     }
 }
-
 
 // ==========================================
 // 3. ENEMY_REGISTRY への自動登録

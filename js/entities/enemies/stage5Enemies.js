@@ -257,6 +257,7 @@ export class BossEnemy_05 extends BossEnemy {
         this.timer = 0;
         this.baseX = x;
         this.hasSplit = false;
+        this.shotCount = 0;
     }
 
     update(game) {
@@ -269,23 +270,30 @@ export class BossEnemy_05 extends BossEnemy {
                 if (this.y >= 60) {
                     this.state = 'PULSE_WAVE';
                     this.timer = 0;
+                    // 🎯 到着したその時点のX位置を基準点として確定
+                    this.baseX = this.x;
                 }
                 break;
 
             case 'PULSE_WAVE':
                 // 呼吸するようにゆったり浮遊
                 this.x = this.baseX + Math.sin(this.timer * 0.02) * 60;
-                this.y = 60 + Math.cos(this.timer * 0.04) * 20;
+                // 🎯 timer=0 の時 cos(0)=1 となるため、(1 - cos) にして y=60 から滑らかに下降・スタートさせる
+                this.y = 60 + (1 - Math.cos(this.timer * 0.04)) * 20;
 
                 // 粘着質なシンセアルペジオと同調した自機狙い連射弾（ゼロ除算保護）
                 const interval = Math.max(1, Math.floor(15 / (this.fireRateMultiplier || 1)));
                 if (this.timer % interval === 0) {
-                    this.bulletType = 'aim';
-                    this.shoot(game);
+                    // 🎯 10発中2発のタイミングで発射をスキップ
+                    if (this.shotCount % 10 < 8) {
+                        this.bulletType = 'aim';
+                        this.shoot(game);
+                    }
+                    this.shotCount++; // カウントを進める
                 }
 
-                // 🧬 ギミック: HPが半分を切ると、おぞましい細胞分裂とともに弾幕が常時激化
-                if (!this.hasSplit && this.hp < this.maxHp / 2) {
+                // 🧬 ギミック: HPが1/3を切ると、おぞましい細胞分裂とともに弾幕が常時激化
+                if (!this.hasSplit && this.hp < this.maxHp / 3) {
                     this.hasSplit = true;
                     this.fireRateMultiplier = 2.0; // 攻撃速度が2倍へ昇華
                 }
@@ -303,9 +311,14 @@ export class BossEnemy_05 extends BossEnemy {
         // 分裂（暴走）後は不気味な紫色に輝き、激しく脈動（スケール変化）する
         if (this.hasSplit) {
             const scale = 1.0 + Math.sin(this.timer * 0.2) * 0.08;
-            ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+            const cx = this.x + this.width / 2;
+            const cy = this.y + this.height / 2;
+            
+            // 🎯 中小中心で安全に拡大縮小適用
+            ctx.translate(cx, cy);
             ctx.scale(scale, scale);
-            ctx.translate(-(this.x + this.width / 2), -(this.y + this.height / 2));
+            ctx.translate(-cx, -cy);
+            
             ctx.filter = 'hue-rotate(280deg) saturate(2.5) brightness(1.1)';
         }
         super.draw(ctx);
@@ -321,7 +334,6 @@ export class BossEnemy_05 extends BossEnemy {
         );
     }
 }
-
 
 // ==========================================
 // 3. ENEMY_REGISTRY への自動登録
