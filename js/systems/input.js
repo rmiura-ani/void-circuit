@@ -1,7 +1,7 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * systems.js
+ * input.js - Unified Input Management
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
@@ -13,50 +13,76 @@
  * キーボード、マウス、タッチの入力を正規化して保持します。
  */
 export class InputManager {
-    constructor(canvas) {
+    constructor(canvas, options = {}) {
         this.canvas = canvas;
-        this.keys = new Set(); // Setを使って重複を防止
+        this.ignoreElementId = options.ignoreElement || 'start-screen';
+
+        this.keys = new Set();
         this.touchX = null;
         this.touchY = null;
         this.isTouching = false;
+        this.isCanvasOutClicked = false;
 
+        this._abortController = new AbortController();
         this._setupEventListeners();
     }
 
     _setupEventListeners() {
+        const { signal } = this._abortController;
+
         // キーボード
-        window.addEventListener('keydown', (e) => this.keys.add(e.code));
-        window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+        window.addEventListener('keydown', (e) => this.keys.add(e.code), { signal });
+        window.addEventListener('keyup', (e) => this.keys.delete(e.code), { signal });
 
         const updatePos = (e) => this._handleCoordinate(e);
 
-        this.isCanvasOutClicked = false;
+        // 画面外クリック検出
         window.addEventListener('mousedown', (e) => {
             if (e.target !== this.canvas) {
-                if (document.getElementById('start-screen')?.contains(e.target)) return;
+                const ignoreEl = document.getElementById(this.ignoreElementId);
+                if (ignoreEl?.contains(e.target)) return;
                 this.isCanvasOutClicked = true;
             }
-        });
+        }, { signal });
 
-        // マウス (canvas内)
-        this.canvas.addEventListener('mousedown', (e) => { this.isTouching = true; updatePos(e); });
-        window.addEventListener('mousemove', (e) => { if (this.isTouching) updatePos(e); });
-        window.addEventListener('mouseup', () => { this.isTouching = false; });
+        // マウス (canvas内 / window全体)
+        if (this.canvas) {
+            this.canvas.addEventListener('mousedown', (e) => {
+                this.isTouching = true;
+                updatePos(e);
+            }, { signal });
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (this.isTouching) updatePos(e);
+        }, { signal });
+
+        window.addEventListener('mouseup', () => {
+            this.isTouching = false;
+        }, { signal });
 
         // タッチ (iOS/Android 向け最適化)
-        const touchOptions = { passive: false };
-        this.canvas.addEventListener('touchstart', (e) => {
-            this.isTouching = true;
-            updatePos(e);
-            if (e.cancelable) e.preventDefault();
-        }, touchOptions);
+        if (this.canvas) {
+            const touchOptions = { passive: false, signal };
 
-        this.canvas.addEventListener('touchmove', (e) => {
-            updatePos(e);
-            if (e.cancelable) e.preventDefault();
-        }, touchOptions);
+            this.canvas.addEventListener('touchstart', (e) => {
+                this.isTouching = true;
+                updatePos(e);
+                if (e.cancelable) e.preventDefault();
+            }, touchOptions);
 
-        this.canvas.addEventListener('touchend', () => { this.isTouching = false; });
+            this.canvas.addEventListener('touchmove', (e) => {
+                updatePos(e);
+                if (e.cancelable) e.preventDefault();
+            }, touchOptions);
+
+            const resetTouch = () => {
+                this.isTouching = false;
+            };
+
+            this.canvas.addEventListener('touchend', resetTouch, { signal });
+                this.canvas.addEventListener('touchcancel', resetTouch, { signal });
+        }
     }
 
     getAndResetCanvasOutClick() {
@@ -79,5 +105,14 @@ export class InputManager {
         this.touchY = (clientY - rect.top) * scaleY;
     }
 
-    isPressed(keyCode) { return this.keys.has(keyCode); }
+    isPressed(keyCode) { 
+        return this.keys.has(keyCode); 
+    }
+
+    /** インスタンス破棄時にイベントリスナーを一括解除 */
+    destroy() {
+        this._abortController.abort();
+        this.keys.clear();
+        this.isTouching = false;
+    }
 }

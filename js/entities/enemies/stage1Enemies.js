@@ -7,18 +7,7 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
-
-/**
- * 状態定数
- */
-const BOSS_STATE = {
-    ENTRANCE: "ENTRANCE",
-    BATTLE: "BATTLE",
-    ESCAPE: "ESCAPE"
-};
 
 // ========================================================
 // BossEnemy_01 (アイアン・ヴェイン防衛コア)
@@ -38,9 +27,10 @@ export class BossEnemy_01 extends BossEnemy {
         this.width = 96;
         this.height = 80;
         
+         'NORMAL'; // NORMAL, DIVING, ASCENDING
         // 移動・演出関連
         this.stopY = 90;
-        this.state = BOSS_STATE.ENTRANCE;
+        this.state = 'ENTRANCE'; // ENTRANCE, BATTLE
         this.frame = 0;
         this.startX = x;
         this.entranceSpeed = 1.5;
@@ -65,16 +55,12 @@ export class BossEnemy_01 extends BossEnemy {
         this.frame++;
 
         switch (this.state) {
-            case BOSS_STATE.ENTRANCE:
+            case 'ENTRANCE':
                 this.updateEntrance();
                 break;
 
-            case BOSS_STATE.BATTLE:
+            case 'BATTLE':
                 this.updateBattle(game);
-                break;
-
-            case BOSS_STATE.ESCAPE:
-                // 将来的な撤退処理用
                 break;
 
             default:

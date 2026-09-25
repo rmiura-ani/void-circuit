@@ -12,7 +12,16 @@ import { SystemController } from './controller.js';
 window.addEventListener('DOMContentLoaded', () => {
     const sys = new SystemController();
     
-    sys.init().then(() => {
-        sys.startLoop();
+    sys.init()
+        .then(() => {
+            sys.startLoop();
+        })
+        .catch((err) => {
+            console.error('[Main] System initialization failed:', err);
+        });
+
+    // ページ離脱・リロード時に SystemController と配下のオブジェクトを破棄
+    window.addEventListener('beforeunload', () => {
+        sys.destroy();
     });
 });

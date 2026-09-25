@@ -12,12 +12,30 @@ import { ScenarioManager } from './systems/scenario.js';
 import { AssetManager } from './entities/base.js';
 import { GameUIManager } from './game-ui.js';
 import { GameCollisionManager } from './game-collision.js';
+import { BackgroundManager } from './background.js'; // ★ 不足していたインポートを追加
 
-import './entities/enemies/index.js'; // これ1つで全ステージの敵がレジストリに登録される
+import './entities/enemies/index.js'; // 全ステージの敵がレジストリに登録される
 
 import { Player, Bullet } from './entities/player.js';
 import { Enemy, EnemyBullet } from './entities/enemy.js';
 import { Particle, ScoreText } from './entities/effects.js';
+
+// 設定・定数の定義
+const GAME_CONFIG = {
+    WIDTH: 320,
+    HEIGHT: 480,
+    UI_HEADER_HEIGHT: 40,
+    PLAYER_SPAWN_Y_OFFSET: 80,
+    PLAYER_SPAWN_WAIT_TIME: 90,
+    PLAYER_SPAWN_INVINCIBLE_TIME: 180,
+    FPS: 60,
+    DIFFICULTY_PARAMS: {
+        'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
+        'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
+        'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
+        'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
+    }
+};
 
 /**
  * ゲーム全体を統括するメインクラス
@@ -31,16 +49,13 @@ export class Game {
         this.canvas = controller.canvas;
         this.ctx = this.canvas.getContext('2d');
 
-        this.width = 320;
-        this.height = 480;
-        this.uiHeaderHeight = 40;
-        this.playerSpawnYOffset = 80;
-        this.playerSpawnWaitTime = 90;
-        this.playerSpawnInvincibleTime = 180;
-        this.fps = 60;
+        this.width = GAME_CONFIG.WIDTH;
+        this.height = GAME_CONFIG.HEIGHT;
+        this.playerSpawnYOffset = GAME_CONFIG.PLAYER_SPAWN_Y_OFFSET;
+        this.playerSpawnWaitTime = GAME_CONFIG.PLAYER_SPAWN_WAIT_TIME;
+        this.playerSpawnInvincibleTime = GAME_CONFIG.PLAYER_SPAWN_INVINCIBLE_TIME;
 
         this.background = new BackgroundManager(this.width, this.height);
-
         this.scenario = new ScenarioManager();
         this.assets = new AssetManager(this.sc.assetBase);
         this.ui = new GameUIManager(this);
@@ -51,11 +66,9 @@ export class Game {
         this._lives = controller.config.lives;
         this.isRunning = false;
 
-        this.reset();
+        this._abortController = null;
 
-        // イベントリスナーの保持（破棄用）
-        this._boundKeyDown = (e) => this.handleKeyDown(e);
-        this._boundMouseDown = (e) => this.handleMouseDown(e);
+        this.reset();
     }
 
     // --- Getter / Setter ---
@@ -115,30 +128,43 @@ export class Game {
         this.sc.audio?.resetBGM();
     }
 
+    /** イベントリスナーの安全なアタッチ */
+    _attachEventListeners() {
+        this._detachEventListeners(); // 二重アタッチ防止
+
+        this._abortController = new AbortController();
+        const { signal } = this._abortController;
+
+        window.addEventListener('keydown', (e) => this.handleKeyDown(e), { signal });
+        window.addEventListener('mousedown', (e) => this.handleMouseDown(e), { signal });
+    }
+
+    /** イベントリスナーの解除 */
+    _detachEventListeners() {
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
+        }
+    }
+
     /** ゲーム開始 */
     async start(initialInputMode, startStage = 1) {
         this.ui.resetGameUIState();
-        const diffParams = {
-            'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
-            'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
-            'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
-            'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
-        };
-        this.scenario.setDifficulty(diffParams[this.sc.config.difficulty]);
+        
+        const diffParam = GAME_CONFIG.DIFFICULTY_PARAMS[this.sc.config.difficulty] || GAME_CONFIG.DIFFICULTY_PARAMS['NORMAL'];
+        this.scenario.setDifficulty(diffParam);
         
         this.reset();
-
-        window.removeEventListener('keydown', this._boundKeyDown);
-        window.removeEventListener('mousedown', this._boundMouseDown);
-        window.addEventListener('keydown', this._boundKeyDown);
-        window.addEventListener('mousedown', this._boundMouseDown);
+        this._attachEventListeners();
         
         this.stats.inputMode = initialInputMode;
 
         const success = await this.initStage(startStage);
         if (!success) return; 
 
-        Analytics.logLevelStart(this.missionConfig);
+        if (typeof Analytics !== 'undefined') {
+            Analytics.logLevelStart(this.missionConfig);
+        }
         this.isRunning = true;
     }
 
@@ -223,7 +249,6 @@ export class Game {
         currentEntities.forEach(e => {
             e.update(this);
 
-            // 画面外判定
             if (e.active && typeof e.isOutOfBounds === 'function') {
                 if (e.isOutOfBounds()) {
                     e.active = false;
@@ -231,7 +256,6 @@ export class Game {
             }
         });
 
-        // active なものだけ抽出してクリーンアップ
         this.entities = this.entities.filter(e => e.active);
     }
 
@@ -251,7 +275,6 @@ export class Game {
         if (isEnemyAllKilled && !this.isCleared) {
             this.postBossTimer++;
 
-            // エンティティの存在を確認
             const isEffectsFinished = (this.entities.length === 0);
             const isTimeout = (this.postBossTimer >= 150);
 
@@ -317,28 +340,37 @@ export class Game {
         this.player.setInvincible(this.playerSpawnInvincibleTime);
     }
 
-    /** 描画マスタ */
+    /** 描画マスタ（1ループで描画レイヤー順に一括処理） */
     draw() {
-        // 通常のゲーム画面を黒クリア
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         this.background.draw(this.ctx);
         
         if (!this.player) return;
 
-        // 弾やエフェクトの描画
-        this.entities.forEach(e => { if (e instanceof Bullet || e instanceof EnemyBullet) e.draw(this.ctx); });
+        // 描画優先度を分類して1回の走査でバケット分け
+        const bullets = [];
+        const normalEnemies = [];
+        const bossEnemies = [];
+        const otherEntities = [];
 
-        // 敵・ボスの描画
-        this.entities.forEach(e => { if (e instanceof Enemy && !e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
-        this.entities.forEach(e => { if (e instanceof Enemy && e.isBoss) e.draw(this.ctx, this.isInvincibleCheat); });
-
-        // 一般的な Entity（WarningEffect や ScoreText など）を描画
-        this.entities.forEach(e => {
-            if (!(e instanceof Enemy) && !(e instanceof Bullet) && !(e instanceof EnemyBullet)) {
-                e.draw(this.ctx);
+        for (let i = 0; i < this.entities.length; i++) {
+            const e = this.entities[i];
+            if (e instanceof Bullet || e instanceof EnemyBullet) {
+                bullets.push(e);
+            } else if (e instanceof Enemy) {
+                if (e.isBoss) bossEnemies.push(e);
+                else normalEnemies.push(e);
+            } else {
+                otherEntities.push(e);
             }
-        });
+        }
+
+        // 重ね順に従って順次描画
+        bullets.forEach(e => e.draw(this.ctx));
+        normalEnemies.forEach(e => e.draw(this.ctx, this.isInvincibleCheat));
+        bossEnemies.forEach(e => e.draw(this.ctx, this.isInvincibleCheat));
+        otherEntities.forEach(e => e.draw(this.ctx));
 
         // 自機描画
         this.player.draw(this.ctx);
@@ -352,17 +384,21 @@ export class Game {
         if (!this.isRunning && this.gameOverTimer > 182) return;
         this.isRunning = false;
 
-        window.removeEventListener('keydown', this._boundKeyDown);
-        window.removeEventListener('mousedown', this._boundMouseDown);
+        this._detachEventListeners();
 
         this.missionConfig.score = this.score;
-        Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
 
-        Analytics.logPostScore(this.score, this.currentStageNum);
+        if (typeof Analytics !== 'undefined') {
+            Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
+            Analytics.logPostScore(this.score, this.currentStageNum);
+        }
+
         const isNew = this.score > this.sc.highScore && this.score > 0;
         if (isNew) {
             this.sc.highScore = this.score;
-            Analytics.logAchievement('HI_SCORE_BREAK');
+            if (typeof Analytics !== 'undefined') {
+                Analytics.logAchievement('HI_SCORE_BREAK');
+            }
         }
         
         const weaponContainer = document.getElementById('weapon-container');
@@ -372,18 +408,22 @@ export class Game {
         this.sc.startIdleTimer();
     }
 
+    /** インスタンス破棄 */
+    destroy() {
+        this.isRunning = false;
+        this._detachEventListeners();
+        if (this.escTimer) clearTimeout(this.escTimer);
+    }
+
     // --- プライベート・内部処理用メソッド ---
 
-    /** キー入力ハンドラ */
     handleKeyDown(e) {
         if (!this.isRunning) return;
         if (e.key === 'Escape') this.handleEmergencyEscape();
     }
 
-    /** マウス入力ハンドラ */
     handleMouseDown(e) { }
 
-    /** ESC連打でゲーム終了 */
     handleEmergencyEscape() {
         if (this.escTimer) clearTimeout(this.escTimer);
 
@@ -407,7 +447,6 @@ export class Game {
         }
     }
 
-    /** 操作モードの動的記録 */
     updateInputMode() {
         if (this.stats.inputMode === 'BOTH') return;
         const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));

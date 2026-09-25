@@ -7,8 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
@@ -27,9 +25,8 @@ export class WindSlicerEnemy extends Enemy {
         this.height = (157 / 241) * 40;
         this.isLeftToRight = isLeftToRight;
         
-        // x が明示的に指定されている場合はそれを使い、未指定(null/undefined)なら画面外にセット
-        const defaultX = isLeftToRight ? -this.width : game.width + this.width;
-        this.x = (x !== undefined && x !== null) ? x : defaultX;
+        // 指定された x は使わない、画面外にセット
+        this.x = isLeftToRight ? -this.width : game.width + this.width;
 
         this.speedX = isLeftToRight ? 7.0 : -7.0; // 超高速水平移動
         this.hasShot = false;
@@ -54,6 +51,22 @@ export class WindSlicerEnemy extends Enemy {
         if (this.x < -60 || this.x > game.width + 60) {
             this.active = false;
         }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        // 右から左へ向かう場合（!isLeftToRight）は左右反転を行う
+        if (!this.isLeftToRight) {
+            // 画像の中心位置を軸にしてX軸方向に反転
+            const centerX = this.x + this.width / 2;
+            const centerY = this.y + this.height / 2;
+
+            ctx.translate(centerX, centerY);
+            ctx.scale(-1, 1);
+            ctx.translate(-centerX, -centerY);
+        }
+        super.draw(ctx);
+        ctx.restore(); 
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -101,100 +114,6 @@ export class CloudLurkerEnemy extends Enemy {
 
     static create(game, x, y, bType, data = {}) {
         return new CloudLurkerEnemy(game, x, y, bType);
-    }
-}
-
-/**
- * 3. GaleArtillery: 画面上部に陣取り、強風（自機を横へ押し流す風圧効果）を発生させる固定砲台
- */
-export class GaleArtilleryEnemy extends Enemy {
-    get imageName() { return "enemy_gale_artillery.webp"; }
-
-    constructor(game, x, y, bulletType, stopY = 80) {
-        super(game, x, y, bulletType, 4); // HP = 4
-        this.width = 40;
-        this.height = (155 / 291) * 40;
-        this.stopY = stopY;
-        this.timer = 0;
-        this.state = 'MOVE_IN';
-        this.windDirection = Math.random() < 0.5 ? 1 : -1; // 左吹きか右吹きか
-
-        this.windParticles = Array.from({ length: 15 }, () => ({
-            x: Math.random() * game.width,
-            y: Math.random() * game.height,
-            length: 20 + Math.random() * 40, // 線の長さ
-            speed: 6 + Math.random() * 6     // 風のスピード
-        }));
-    }
-
-    update(game) {
-        if (!this.active) return;
-
-        switch (this.state) {
-            case 'MOVE_IN':
-                this.y += 2.0;
-                if (this.y >= this.stopY) {
-                    this.state = 'BLOW_GALE';
-                }
-                break;
-
-            case 'BLOW_GALE':
-                this.timer++;
-
-                // 🌪️ 風圧を自機へ「外部の力」として加える
-                if (game.player && game.player.alive) {
-                    // マウス操作でも流されるよう、風圧の強さを少し高め（例: 1.5〜2.0程度）に設定
-                    const windPower = (Math.sin(this.timer * 0.08) * 0.8 + 1.2); 
-                    game.player.windForceX = this.windDirection * windPower;
-                }
-
-                if (this.timer % Math.floor(45 / this.fireRateMultiplier) === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
-                }
-
-                if (this.timer >= 300) {
-                    this.state = 'RETREAT';
-                }
-                break;
-
-            case 'RETREAT':
-                this.y -= 3.0;
-                break;
-        }
-    }
-
-    draw(ctx) {
-        super.draw(ctx); // 本体描画
-
-        // 🌪️ 風を吹かせている状態の時だけ風圧ラインを描画
-        if (this.state === 'BLOW_GALE') {
-            ctx.save();
-            ctx.strokeStyle = 'rgba(200, 255, 255, 0.4)'; // うっすら光る水色/白
-            ctx.lineWidth = 1.5;
-
-            // 💡 ctx.canvas から画面幅を取得
-            const gameWidth = ctx.canvas.width;
-
-            for (const p of this.windParticles) {
-                // 風の向きに合わせてパーティクルを移動
-                p.x += this.windDirection * p.speed;
-
-                // 画面外に出たら反対側からリスポーン（game.width / this.gamewidth を置き換え）
-                if (this.windDirection > 0 && p.x > gameWidth) p.x = -p.length;
-                if (this.windDirection < 0 && p.x < -p.length) p.x = gameWidth;
-
-                // 描画（風の流れを表す横線）
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y);
-                ctx.lineTo(p.x + (this.windDirection * p.length), p.y);
-                ctx.stroke();
-            }
-            ctx.restore();
-        }
-    }   
-    static create(game, x, y, bType, data = {}) {
-        return new GaleArtilleryEnemy(game, x, y, bType, data.stopY || 80);
     }
 }
 
@@ -404,20 +323,6 @@ export class BossEnemy_03 extends BossEnemy {
         }
     }
 
-    onDie(game) {
-        if (game.collisions) {
-            for (let i = 0; i < 12; i++) {
-                setTimeout(() => {
-                    game.collisions.createExplosion(
-                        this.x + Math.random() * this.width, 
-                        this.y + Math.random() * this.height, 
-                        { maxHp: 100 }
-                    );
-                }, i * 100);
-            }
-        }
-    }
-
     static create(game, x, y, bType, data = {}) {
         return new BossEnemy_03(
             game, x, y, 
@@ -435,7 +340,6 @@ export class BossEnemy_03 extends BossEnemy {
 
 ENEMY_REGISTRY.set('wind_slicer', WindSlicerEnemy);
 ENEMY_REGISTRY.set('cloud_lurker', CloudLurkerEnemy);
-ENEMY_REGISTRY.set('gale_artillery', GaleArtilleryEnemy);
 ENEMY_REGISTRY.set('sky_falcon', SkyFalconEnemy);
 ENEMY_REGISTRY.set('aegis_cruiser', AegisCruiserEnemy);
 ENEMY_REGISTRY.set('boss_03', BossEnemy_03);

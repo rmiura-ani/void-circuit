@@ -7,8 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
@@ -22,8 +20,8 @@ export class DustScoutEnemy extends Enemy {
     get imageName() { return "enemy_dust_scout.webp"; }
 
     constructor(game, x, y, bulletType) {
-        // 引数 y が明示されていない場合は画面最下部からスポーン
-        const spawnY = (y !== undefined && y !== null) ? y : game.height + 32;
+        // yは利用せず、画面最下部からスポーン
+        const spawnY = game.height + 32;
         super(game, x, spawnY, bulletType, 1); // HP = 1
         this.speedY = -2.5; // 上昇移動
         this.hasShot = false;
@@ -58,6 +56,8 @@ export class RelicPrismEnemy extends Enemy {
 
     constructor(game, x, y, bulletType, stopY = 120) {
         super(game, x, y, bulletType, 3); // HP = 3
+        this.width = 80;
+        this.height = 80;
         this.stopY = stopY;
         this.timer = 0;
         this.rotationAngle = 0;
@@ -153,7 +153,8 @@ export class SandPillarEnemy extends Enemy {
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 5); // HP = 5
-        this.height = 64; // 縦長
+        this.width = 64;
+        this.height = (467/394) * 64;
         this.speedY = 0.5;
     }
 
@@ -183,7 +184,7 @@ export class GigaOrbEnemy extends Enemy {
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 10); // HP = 10
-        this.width = 48;
+        this.width = (510/440) * 48;
         this.height = 48;
         this.state = 'CHARGE'; // CHARGE, FIRE, RETREAT
         this.timer = 0;
@@ -315,20 +316,6 @@ export class BossEnemy_04 extends BossEnemy {
                     this.shoot(game);
                 }
                 break;
-        }
-    }
-
-    onDie(game) {
-        if (game.collisions) {
-            for (let i = 0; i < 10; i++) {
-                setTimeout(() => {
-                    game.collisions.createExplosion(
-                        this.x + Math.random() * this.width, 
-                        this.y + Math.random() * this.height, 
-                        { maxHp: 120 }
-                    );
-                }, i * 120);
-            }
         }
     }
 

@@ -7,8 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 import { Entity } from './base.js';
 import { WarningEffect } from './effects.js';
 
@@ -240,6 +238,7 @@ export class Enemy extends Entity {
 
         ctx.restore();
     }
+    
     onDie(game, soundoff = false) {
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
@@ -264,6 +263,31 @@ export class BossEnemy extends Enemy {
         this.timeLimit = timeLimit || 1800;
         this.timeMultiplier = timeMultiplier || 100;
         this.isBoss = true;
+    }
+    
+    onDie(game, soundoff = false) {
+        super.onDie(game, soundoff);
+
+        // 【修正3】ボス死亡時の連鎖爆発演出
+        const explosionCount = 8;
+        const intervalMs = 150;
+
+        for (let i = 0; i < explosionCount; i++) {
+            setTimeout(() => {
+                // ゲームインスタンスや衝突判定クラスが生存しているかチェック
+                if (!game?.collisions) return;
+
+                // 連鎖爆発のSEは、最初・中間・最後など数回だけに抑えて音割れを防ぐ
+                const shouldPlaySound = !soundoff && (i === 0 || i === 3 || i === 7);
+
+                game.collisions.createExplosion(
+                    this.x + Math.random() * this.width, 
+                    this.y + Math.random() * this.height, 
+                    this,
+                    !shouldPlaySound // soundoff フラグを制御
+                );
+            }, i * intervalMs);
+        }
     }
 }
 

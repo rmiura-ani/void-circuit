@@ -7,8 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 // ==========================================
 // 1. 各ステージ背景の基底（ベース）クラス
 // ==========================================
@@ -483,7 +481,7 @@ class Stage7Background extends StageBackground {
 // ==========================================
 // 3. 全体を統括するマネージャークラス
 // ==========================================
-class BackgroundManager {
+export class BackgroundManager {
     constructor(width, height) {
         this.width = width;
         this.height = height;

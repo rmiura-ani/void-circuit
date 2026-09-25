@@ -17,35 +17,16 @@ import { Game } from './game.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.64";
+        this.VERSION = "0.65";
         this.canvas = document.getElementById('game-canvas');
 
-        // URLパラメータの解析（GitHub上の別ブランチやタグをテストするため）
-        const urlParams = new URLSearchParams(window.location.search);
-        const tag = urlParams.get('tag');
-        const branch = urlParams.get('branch') || 'main'
-        const refPath = tag ? `tags/${tag}` : `heads/${branch}`;
-        const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
+        // アセット参照パスの判別
+        this.assetBase = this._determineAssetBase();
 
-        // 【優先切替】ローカルなら指定されたローカルパスを強制適用、本番ならGitHub
-        const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
-        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-        if (isLocal) {
-            this.assetBase = LOCAL_ASSET_ROOT;
-            this.tag = 'local' 
-        } else {
-            this.assetBase = githubBase;
-            this.tag = tag ? `${tag}` : `${branch}`;
-        }
-        // パスが必ずスラッシュ（/）で終わるように補正
-        if (!this.assetBase.endsWith("/")) {
-            this.assetBase += "/";
-        }
-
-        console.log(`[System] Asset Base Path determined: "${this.assetBase}" (Local Mode: ${isLocal})`);
+        console.log(`[System] Asset Base Path determined: "${this.assetBase}"`);
 
         // サブシステムの初期化
-        this.input = new InputManager(this.canvas);
+        this.input = new InputManager(this.canvas, { ignoreElement: 'start-screen' });
         this.audio = new AudioManager(this.assetBase);
         this.config = new ConfigManager(this);
         this.config.loadConfig();
@@ -53,14 +34,35 @@ export class SystemController {
         this.game = null; 
         this.isShowingCredits = false;
         this.idleTimeout = null;
+        this._abortController = null;
     }
 
-    // --- プロパティ ---
+    /** アセットベースURLの動的決定 */
+    _determineAssetBase() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tag = urlParams.get('tag');
+        const branch = urlParams.get('branch') || 'main';
+        const refPath = tag ? `tags/${tag}` : `heads/${branch}`;
+        const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
+
+        const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
+        const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+        
+        let basePath = isLocal ? LOCAL_ASSET_ROOT : githubBase;
+        this.tag = isLocal ? 'local' : (tag ? `${tag}` : `${branch}`);
+
+        if (!basePath.endsWith("/")) {
+            basePath += "/";
+        }
+        return basePath;
+    }
+
+    // --- プロパティ (ハイスコア管理) ---
+
     set highScore(val) {
         const scoreBound = Math.min(val, 99999990);
         localStorage.setItem('void_circuit_highscore', scoreBound);
         
-        // game-ui がいない可能性があるため、直接更新
         const hiScoreEl = document.getElementById('hi-score-display');
         if (hiScoreEl) {
             hiScoreEl.classList.add('counter-stop');
@@ -71,7 +73,7 @@ export class SystemController {
     get highScore() { 
         return parseInt(localStorage.getItem('void_circuit_highscore'), 10) || 0; 
     }
-    /** ハイスコアリセット */
+
     resetHighScore() {
         this.highScore = 0;
         localStorage.removeItem('void_circuit_highscore');
@@ -79,16 +81,18 @@ export class SystemController {
 
     /** 初期化 */
     async init() {
-        document.getElementById('version-display').innerText = this.VERSION;
-        document.getElementById('config-open-btn').style.display = 'none';
+        const versionEl = document.getElementById('version-display');
+        if (versionEl) versionEl.innerText = this.VERSION;
+
+        const configBtn = document.getElementById('config-open-btn');
+        if (configBtn) configBtn.style.display = 'none';
 
         try {
-            // ハイスコア（ストレージから呼び出して表示）
-            const loadHighScore = this.highScore;
-            this.highScore = loadHighScore;
+            // ハイスコア表示の再更新
+            this.highScore = this.highScore;
             
             this.setStartMessage("Click or [Z]Key to Start", "#0FF");
-            document.getElementById('config-open-btn').style.display = 'block';
+            if (configBtn) configBtn.style.display = 'block';
 
             this.setupGlobalEvents();
             this.startIdleTimer();
@@ -96,42 +100,47 @@ export class SystemController {
             console.error("[System] Init Failed:", e);
             this.setStartMessage("❌ ERROR: Failed to Load Assets", "#F44");
         }
-        Analytics.logGameLaunch(this.VERSION);
+
+        if (typeof Analytics !== 'undefined') {
+            Analytics.logGameLaunch(this.VERSION);
+        }
     }
 
-    /** main.js から呼ばれる起動エントリーポイント */ 
+    /** メインループ制御 */ 
     startLoop() {
         const loop = () => {
-            this.update(); // 自身のアップデート処理へ
-            this.draw();   // 自身の描画処理へ
-            
+            this.update();
+            this.draw();
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
     }
 
-    /** システム全体の更新処理 */
     update() {
-        if (this.game && this.game.isRunning) {
+        if (this.game?.isRunning) {
             this.game.update();
         }
     }
 
-    /** システム全体の描画処理 */
     draw() {
-        if (this.game && this.game.isRunning) {
+        if (this.game?.isRunning) {
             this.game.draw();
         }
     }
     
-    /** イベントリスナー セットアップ */
+    /** イベントリスナー セットアップ (AbortControllerで安全化) */
     setupGlobalEvents() {
-        document.getElementById('start-screen').addEventListener('click', () => this.handleProceed('MOUSE'));
+        if (this._abortController) this._abortController.abort();
+        this._abortController = new AbortController();
+        const { signal } = this._abortController;
+
+        document.getElementById('start-screen')?.addEventListener('click', () => this.handleProceed('MOUSE'), { signal });
+        
         document.getElementById('config-open-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.stopIdleTimer();
             this.config.open();
-        });
+        }, { signal });
 
         window.addEventListener('keydown', (e) => {
             if (this.config.isMode) {
@@ -143,13 +152,14 @@ export class SystemController {
                 this.config.open();
             }
             if (['Space', 'KeyZ'].includes(e.code)) this.handleProceed('KEYBOARD');
-             if (this.config && this.config.isInvincibleCheat) {
+            
+            if (this.config?.isInvincibleCheat) {
                 const keyNum = parseInt(e.key, 10);
                 if (keyNum >= 1 && keyNum <= 7) {
                     this.handleProceed('KEYBOARD', keyNum);
                 }
             }
-        });
+        }, { signal });
 
         const credits = document.getElementById('credit-screen');
         if (credits) {
@@ -159,21 +169,28 @@ export class SystemController {
         }
     }
 
-    /** 実行ハンドラ */
+    /** ゲーム進行ハンドラ（古いGameインスタンスを破棄して新生成） */
     handleProceed(type, stage = 1) {
-        if (this.config.isMode || (this.game && this.game.isRunning)) return;
+        if (this.config.isMode || this.game?.isRunning) return;
         if (this.isShowingCredits) return this.backToTitle();
         
         // ゲームオーバー直後の連打防止
-        if (this.game && this.game.player && !this.game.player.alive && this.game.gameOverTimer < 30) return;
+        if (this.game?.player && !this.game.player.alive && this.game.gameOverTimer < 30) return;
 
         this.stopIdleTimer();
-        if (!this.game) this.game = new Game(this);
+
+        // 既存のゲームがあれば破棄してリセット
+        if (this.game) {
+            this.game.destroy();
+            this.game = null;
+        }
+
+        this.game = new Game(this);
         this.game.start(type === 'MOUSE' ? 'MOUSE' : 'KEYBOARD', stage);
     }
 
     // --- 画面遷移系 ---
-    /** タイトル => クレジット表示のタイマー */
+
     startIdleTimer() {
         this.stopIdleTimer();
         this.idleTimeout = setTimeout(() => this.showCredits(), 15000);
@@ -183,28 +200,33 @@ export class SystemController {
         if (this.idleTimeout) clearTimeout(this.idleTimeout); 
     }
     
-    /** クレジット表示 */
     showCredits() {
         this.isShowingCredits = true;
-        document.getElementById('title-content').style.display = 'none';
-        document.getElementById('config-open-btn').style.display = 'none';
+        const title = document.getElementById('title-content');
+        const configBtn = document.getElementById('config-open-btn');
         const screen = document.getElementById('credit-screen');
+
+        if (title) title.style.display = 'none';
+        if (configBtn) configBtn.style.display = 'none';
         if (screen) {
             screen.style.display = 'block';
             screen.classList.add('scrolling');
         }
     }
 
-    /** タイトルに戻る */
     backToTitle() {
         this.isShowingCredits = false;
         const screen = document.getElementById('credit-screen');
+        const title = document.getElementById('title-content');
+        const configBtn = document.getElementById('config-open-btn');
+
         if (screen) {
             screen.style.display = 'none';
             screen.classList.remove('scrolling');
         }
-        document.getElementById('title-content').style.display = 'block';
-        document.getElementById('config-open-btn').style.display = 'block';
+        if (title) title.style.display = 'block';
+        if (configBtn) configBtn.style.display = 'block';
+        
         this.startIdleTimer();
     }
 
@@ -239,12 +261,13 @@ export class SystemController {
         if (pEl) {
             pEl.innerHTML = `<div class="result-msg">${msg}</div>${statsHtml}${isNew ? '<div class="new-record">★ NEW HI-SCORE !! ★</div>' : ''}<br>RETRY OPERATION?`;
         }
-        document.getElementById('start-screen').style.display = 'flex';
+        
+        const startScreen = document.getElementById('start-screen');
+        if (startScreen) startScreen.style.display = 'flex';
 
         this.setupShareButton();
     }
 
-    /** スタートメッセージ */ 
     setStartMessage(text, color) {
         const el = document.querySelector('#start-screen p');
         if (el) {
@@ -254,7 +277,6 @@ export class SystemController {
         }
     }
 
-    /** X へのシェアボタン表示 */ 
     setupShareButton() {
         const btn = document.getElementById('share-btn');
         if (!btn) return;
@@ -265,7 +287,6 @@ export class SystemController {
         };
     }
 
-    /** シェア用文言 */ 
     generateShareText() {
         const scoreVal = this.game ? this.game.score : 0;
         return `PROJECT: VOID-CIRCUIT v${this.VERSION}\n` +
@@ -278,17 +299,19 @@ export class SystemController {
                `#VoidCircuit #80年代STG #IndieGame`;
     }
 
-    /** ミッション名導出（未定義エラーへのセーフティを追加） */ 
+    /** ミッション名導出（未定義エラーへのセーフティ強化） */ 
     getMissionCode(isShare = false) {
         const c = this.game?.missionConfig;
         const s = this.game?.stats;
 
+        if (!c || !s) return "UNKNOWN-MISSION";
+
         const diffMap = { 'EASY':'EZ', 'NORMAL':'NM', 'HARD':'HD', 'VERY HARD':'VH' };
         const diffStr = diffMap[c.difficulty] || 'U';
         const cheatStr = c.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
-        const extendStr = c.extend === 'NONE' ? 'OFF' : `${(c.extend/1000000)}M`;
+        const extendStr = c.extend === 'NONE' ? 'OFF' : `${(c.extend / 1000000)}M`;
         const livesStr = `${c.lives}L`;
-        const missionName = c.missionName.toUpperCase();
+        const missionName = (c.missionName || 'UNKNOWN').toUpperCase();
 
         // 操作モード判定
         let controlSuffix = '-MK';
@@ -296,5 +319,18 @@ export class SystemController {
         if (s.inputMode === 'KEYBOARD') controlSuffix = '-K';
 
         return `${missionName}-${diffStr}${cheatStr}-${livesStr}-${extendStr}${controlSuffix}`;
+    }
+
+    /** システム破棄処理 */
+    destroy() {
+        this.stopIdleTimer();
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
+        }
+        if (this.game) {
+            this.game.destroy();
+            this.game = null;
+        }
     }
 }

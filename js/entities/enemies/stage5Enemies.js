@@ -7,8 +7,6 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
-
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
@@ -312,20 +310,6 @@ export class BossEnemy_05 extends BossEnemy {
         }
         super.draw(ctx);
         ctx.restore();
-    }
-
-    onDie(game) {
-        if (game.collisions) {
-            for (let i = 0; i < 14; i++) {
-                setTimeout(() => {
-                    game.collisions.createExplosion(
-                        this.x + Math.random() * this.width, 
-                        this.y + Math.random() * this.height, 
-                        { maxHp: 110 }
-                    );
-                }, i * 90);
-            }
-        }
     }
 
     static create(game, x, y, bType, data = {}) {

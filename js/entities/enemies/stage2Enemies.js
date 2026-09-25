@@ -11,8 +11,12 @@
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
-// 1. AquaJetEnemy（S字型水流機動雑魚）
+// 1. STAGE-2 固有のザコ・中型敵クラス群
 // ==========================================
+
+/**
+/* 1. AquaJetEnemy（S字型水流機動雑魚）
+ */
 export class AquaJetEnemy extends Enemy {
     constructor(game, x, y, bulletType, hp = 2) {
         super(game, x, y, bulletType, hp);
@@ -48,12 +52,10 @@ export class AquaJetEnemy extends Enemy {
         return new AquaJetEnemy(game, x, y, bType, data.hp || 2);
     }
 }
-ENEMY_REGISTRY.set('aquajet', AquaJetEnemy);
 
-
-// ==========================================
-// 2. WaveSpreaderEnemy（波状拡散砲台）
-// ==========================================
+/**
+/* 2. WaveSpreaderEnemy（波状拡散砲台）
+ */
 export class WaveSpreaderEnemy extends Enemy {
     constructor(game, x, y, bulletType, hp = 4) {
         super(game, x, y, bulletType, hp);
@@ -110,12 +112,10 @@ export class WaveSpreaderEnemy extends Enemy {
         return new WaveSpreaderEnemy(game, x, y, bType, data.hp || 4);
     }
 }
-ENEMY_REGISTRY.set('wavespreader', WaveSpreaderEnemy);
 
-
-// ==========================================
-// 3. BubbleMineEnemy（泡装甲浮遊機）
-// ==========================================
+/**
+ * 3. BubbleMineEnemy（泡装甲浮遊機）
+ */
 export class BubbleMineEnemy extends Enemy {
     constructor(game, x, y, bulletType, hp = 6) {
         super(game, x, y, bulletType, hp);
@@ -153,12 +153,10 @@ export class BubbleMineEnemy extends Enemy {
         return new BubbleMineEnemy(game, x, y, bType, data.hp || 6);
     }
 }
-ENEMY_REGISTRY.set('bubblemine', BubbleMineEnemy);
 
-
-// ==========================================
-// 4. VortexDiverEnemy（渦潮急降下機）
-// ==========================================
+/**
+ * 4. VortexDiverEnemy（渦潮急降下機）
+ */
 export class VortexDiverEnemy extends Enemy {
     constructor(game, x, y, bulletType, hp = 3) {
         super(game, x, y, bulletType, hp);
@@ -223,12 +221,13 @@ export class VortexDiverEnemy extends Enemy {
         return new VortexDiverEnemy(game, x, y, bType, data.hp || 3);
     }
 }
-ENEMY_REGISTRY.set('vortexdiver', VortexDiverEnemy);
 
-
+/// ==========================================
+// 2. STAGE-2 ボス実体
 // ==========================================
-// 5. BossEnemy_02（Stage 2 ボス：水棲機甲 leviathan）
-// ==========================================
+/**
+/* 5. BossEnemy_02（Stage 2 ボス：水棲機甲 leviathan）
+ */
 export class BossEnemy_02 extends BossEnemy {
     constructor(game, x, y, hp = 150, timeLimit, timeMultiplier) {
         super(game, x, y, hp, timeLimit, timeMultiplier);
@@ -308,25 +307,17 @@ export class BossEnemy_02 extends BossEnemy {
         ctx.restore();
     }
 
-    onDie(game, soundoff = false) {
-        super.onDie(game, soundoff);
-        // ボス連鎖爆発演出
-        for (let i = 0; i < 8; i++) {
-            setTimeout(() => {
-                if (game?.collisions) {
-                    game.collisions.createExplosion(
-                        this.x + Math.random() * this.width, 
-                        this.y + Math.random() * this.height, 
-                        this,
-                        soundoff
-                    );
-                }
-            }, i * 150);
-        }
-    }
-
     static create(game, x, y, bType, data = {}) {
         return new BossEnemy_02(game, x, y, data.hp || 150, data.timeLimit, data.timeMultiplier);
     }
 }
+
+// ==========================================
+// 3. ENEMY_REGISTRY への自動登録
+// ==========================================
+
+ENEMY_REGISTRY.set('aquajet', AquaJetEnemy);
+ENEMY_REGISTRY.set('wavespreader', WaveSpreaderEnemy);
+ENEMY_REGISTRY.set('bubblemine', BubbleMineEnemy);
+ENEMY_REGISTRY.set('vortexdiver', VortexDiverEnemy);
 ENEMY_REGISTRY.set('boss_02', BossEnemy_02);

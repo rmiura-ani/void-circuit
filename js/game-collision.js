@@ -217,7 +217,7 @@ export class GameCollisionManager {
 
     _calculateAttachScore(enemy){
         const maxHp = enemy.maxHp || 1;
-        const amount = 100 * maxHp * (maxHp + 1);  
+        const amount = 100 + (maxHp * 150);
         this.game.score += amount;
 
         const centerX = enemy.x + enemy.width / 2;
@@ -235,24 +235,27 @@ export class GameCollisionManager {
             const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.game.score += bonus;
-                this.game.entities.push(new ScoreText(game.width / 2, this.game.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+                this.game.entities.push(new ScoreText( this.game.width / 2, this.game.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
             }
         }
     }
 
     createExplosion(x, y, enemy, soundoff = false) {
         const hp = enemy.maxHp || 1;
-        const count = 10 + (hp * 2);
+        
+        // パーティクル数に上限（キャップ）を設ける（最大60個程度に抑える）
+        const rawCount = 10 + Math.floor(hp * 0.2); 
+        const count = enemy.isBoss ? Math.min(rawCount, 60) : Math.min(rawCount, 30);
         const type = enemy.isBoss ? 'boss' : 'enemy';
 
+        // パーティクルの生成
         for (let i = 0; i < count; i++) {
             this.game.entities.push(new Particle(x, y, type));
         }
 
+        // 【修正2】SEの制御（単体の爆発生成では1回だけ鳴らす）
         if (this.game.sc.audio && !soundoff) {
             this.game.sc.audio.playExplosion();
-            if (hp >= 10) setTimeout(() => this.game.sc.audio.playExplosion(), 200);
-            if (hp >= 50) setTimeout(() => this.game.sc.audio.playExplosion(), 400);
         }
     }
 }

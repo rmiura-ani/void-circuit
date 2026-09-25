@@ -234,12 +234,18 @@ export class ScenarioManager {
         this.lastError = null;
     }
 
-    /** 敵インスタンスの動的生成 */
+     /** 敵インスタンスの動的生成 */
     spawnEnemy(data, game) {
         const bType = data.bulletType || 'aim';
         const hp = data.hp || 1;
-        const x = data.x ?? Math.random() * game.width;
-        const y = data.y ?? -32; // 基本は画面外上部
+
+        // 1. x, y は補完せず、渡されたそのままの値（指定なしなら undefined）を一旦保持
+        const rawX = data.x;
+        const rawY = data.y;
+
+        // 暫定座標（仮でランダム/デフォルト値をセットしておき、後で width を使って補正する）
+        let x = rawX ?? Math.random() * game.width;
+        let y = rawY ?? -32; // 基本は画面外上部
         
         // ボス専用パラメータの自動逆算ロジック
         if (data.type && data.type.includes('boss')) {
@@ -257,7 +263,26 @@ export class ScenarioManager {
 
         // 重複生成防止
         if (data.spawned) return;
+
+        // 2. インスタンス生成（この時点で enemy.width, enemy.height が確定する）
         const enemy = createEnemyInstance(data.type, game, x, y, bType, data);
+
+        // 3. 🎯 座標補正処理
+        if (enemy) {
+            // YAML等で x が明示的に指定されている場合：中心指定とみなして左上座標へシフト
+            if (rawX !== undefined && rawX !== null) {
+                enemy.x = rawX - enemy.width / 2;
+            } else if (data.type !== 'wind_slicer') {
+                // x が未指定の一般的なザコ敵：画面幅からはみ出さないランダム位置に調整
+                enemy.x = Math.random() * Math.max(0, game.width - enemy.width);
+            }
+            // (※ wind_slicer のように x 未指定で独自の出現ロジックを持つ敵は、何もしないことで WindSlicer 側の初期化処理に任せる)
+
+            // y も明示的に指定されている場合は中心合わせ（必要に応じて）
+            if (rawY !== undefined && rawY !== null) {
+                enemy.y = rawY - enemy.height / 2;
+            }
+        }
 
         // 🚨 ボス系エンティティが生成された場合の共通演出トリガー
         if (data.type && data.type.includes('boss')) {
