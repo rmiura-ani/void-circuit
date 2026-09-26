@@ -414,8 +414,8 @@ export class BossEnemy_05 extends BossEnemy {
                     this.shotCount++; // カウントを進める
                 }
 
-                // 🧬 ギミック: HPが1/3を切ると、おぞましい細胞分裂とともに弾幕が常時激化
-                if (!this.hasSplit && this.hp < this.maxHp / 3) {
+                // 🧬 ギミック: HPが1/2を切ると、おぞましい細胞分裂とともに弾幕が常時激化
+                if (!this.hasSplit && this.hp < this.maxHp / 2) {
                     this.hasSplit = true;
                     this.fireRateMultiplier = 2.0; // 攻撃速度が2倍へ昇華
                 }

@@ -308,6 +308,36 @@ export class CoralShieldEnemy extends Enemy {
 }
 
 
+
+
+/**
+ * MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
+ */
+export class MineDebrisEnemy extends Enemy {
+    static DEFAULT_SPEED_Y = 1.2;
+
+    get imageName() { return "enemy_mine_debris.webp"; }
+
+    constructor(game, x, y, bulletType, speedY = MineDebrisEnemy.DEFAULT_SPEED_Y) {
+        super(game, x, y, 'none', Infinity);
+        this.speedY = speedY;
+    }
+
+    update(game) {
+        if (!this.active) return;
+        this.y += this.speedY;
+    }
+
+    takeDamage(_amount) {
+        // 完全無敵
+        return false;
+    }
+
+    static create(game, x, y, bType, data = {}) {
+        return new MineDebrisEnemy(game, x, y, bType, data.speedY ?? MineDebrisEnemy.DEFAULT_SPEED_Y);
+    }
+}
+
 // ==========================================
 // 2. STAGE-2 ボス実体
 // ==========================================
@@ -456,4 +486,5 @@ ENEMY_REGISTRY.set('wave_spreader', WaveSpreaderEnemy);
 ENEMY_REGISTRY.set('bubble_mine', BubbleMineEnemy);
 ENEMY_REGISTRY.set('vortex_diver', VortexDiverEnemy);
 ENEMY_REGISTRY.set('coral_shield', CoralShieldEnemy);
+ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
 ENEMY_REGISTRY.set('boss_02', BossEnemy_02);

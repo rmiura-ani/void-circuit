@@ -269,8 +269,8 @@ export class BossEnemy_06 extends BossEnemy {
                     this.shoot(game);
                 }
 
-                // HP30%以下で過熱発狂モードへ
-                if (this.hp < this.maxHp * 0.3) {
+                // HP50%以下で過熱発狂モードへ
+                if (this.hp < this.maxHp * 0.5) {
                     this.state = 'OVERDRIVE';
                     this.timer = 0;
                 }

@@ -98,6 +98,41 @@ export class SineEnemy extends Enemy {
 
 
 /**
+ * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
+ */
+export class ScoutEnemy extends Enemy {
+    get imageName() { return "enemy_scout.webp"; }
+
+    constructor(game, x, y, bulletType, isLeft = true) {
+        super(game, x, y, bulletType, 1);
+        this.timer = 0;
+        this.isLeft = isLeft;
+        this.x = isLeft ? -32 : (game?.width ?? 640) + 32; 
+        this.hasShot = false;
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        this.timer += 0.04;
+        this.x += this.isLeft ? 3.5 : -3.5;
+        this.y = 80 + Math.sin(this.timer) * 120;
+
+        // U字最下点付近で1回だけ射撃
+        if (Math.abs(this.timer - Math.PI / 2) < 0.05 && !this.hasShot) {
+            this.shoot(game); 
+            this.hasShot = true;
+        }
+    }
+
+    static create(game, x, y, bType, data = {}) {
+        const isLeft = data.isLeft ?? true;
+        return new ScoutEnemy(game, x, y, bType, isLeft);
+    }
+}
+
+
+/**
  * StationaryEnemy: 画面内の指定位置まで降りて静止し、弾を撒いて去っていく設置型
  */
 export class StationaryEnemy extends Enemy {
@@ -212,7 +247,7 @@ export class AssaultEnemy extends Enemy {
  * HunterEnemy: 執拗に自機のX座標を追従しながら降下してくるハンター型
  */
 export class HunterEnemy extends Enemy {
-    get imageName() { return ".webp"; }
+    get imageName() { return "enemy_hunter.webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 2); 
@@ -286,162 +321,6 @@ export class ShieldEnemy extends Enemy {
     }
 }
 
-// ==========================================
-// 2. 特殊ギミック・環境障害物タイプ
-// ==========================================
-
-/**
- * RockEnemy: 超高速で垂直落下してくるデブリ・岩石型トラップ
- */
-export class RockEnemy extends Enemy {
-    static DEFAULT_SPEED_Y = 6.0;
-
-    get imageName() { return "enemy_rock.webp"; }
-
-    constructor(game, x, y, bulletType, speedY = RockEnemy.DEFAULT_SPEED_Y) {
-        super(game, x, y, 'none', 1);
-        this.speedY = speedY;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.y += this.speedY;
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        return new RockEnemy(game, x, y, bType, data.speedY ?? RockEnemy.DEFAULT_SPEED_Y);
-    }
-}
-
-
-/**
- * MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
- */
-export class MineDebrisEnemy extends Enemy {
-    static DEFAULT_SPEED_Y = 1.2;
-
-    get imageName() { return "enemy_mine_debris.webp"; }
-
-    constructor(game, x, y, bulletType, speedY = MineDebrisEnemy.DEFAULT_SPEED_Y) {
-        super(game, x, y, 'none', Infinity);
-        this.speedY = speedY;
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.y += this.speedY;
-    }
-
-    takeDamage(_amount) {
-        // 完全無敵
-        return false;
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        return new MineDebrisEnemy(game, x, y, bType, data.speedY ?? MineDebrisEnemy.DEFAULT_SPEED_Y);
-    }
-}
-
-
-/**
- * WormSegment: 連結エネミー（多関節）の胴体パーツ
- */
-export class WormSegment extends Enemy {
-    static SEGMENT_SPACING = 24;
-
-    get imageName() {
-        return this.isTail ? "enemy_worm_tail.webp" : "enemy_worm_body.webp";
-    }
-
-    constructor(game, head, index, isTail = false) {
-        super(game, head.x, head.y - index * WormSegment.SEGMENT_SPACING, 'none', 1);
-        this.head = head;
-        this.index = index;
-        this.isTail = isTail;
-    }
-
-    update(game) {
-        if (!this.active) return;
-
-        if (this.head?.active) {
-            this.y = this.head.y - (this.index * WormSegment.SEGMENT_SPACING);
-            this.x = this.head.x;
-        } else {
-            this.active = false;
-        }
-    }
-
-    takeDamage(amount) {
-        const isDead = super.takeDamage(amount);
-        if (isDead && this.head) {
-            this.head.removeSegment(this);
-        }
-        return isDead;
-    }
-
-    forceDestroy() {
-        this.active = false;
-        this.onDie(this.game, true);
-    }
-}
-
-
-/**
- * WormEnemy: 連結エネミー（頭部）
- */
-export class WormEnemy extends Enemy {
-    static DEFAULT_LENGTH = 5;
-
-    get imageName() { return "enemy_worm_head.webp"; }
-
-    constructor(game, x, y, bulletType, length = WormEnemy.DEFAULT_LENGTH) {
-        super(game, x, y, bulletType, 1);
-        this.speedY = 1.0;
-        this.segments = [];
-
-        if (game?.entities) {
-            for (let i = 1; i < length; i++) {
-                const isTail = (i === length - 1);
-                const seg = new WormSegment(game, this, i, isTail);
-                this.segments.push(seg);
-                game.entities.push(seg);
-            }
-        }
-    }
-
-    update(game) {
-        if (!this.active) return;
-        this.y += this.speedY;
-    }
-
-    removeSegment(seg) {
-        const idx = this.segments.indexOf(seg);
-        if (idx !== -1) {
-            this.segments.splice(idx, 1);
-            this.segments.forEach((s, i) => {
-                s.index = i + 1;
-            });
-        }
-    }
-
-    takeDamage(amount) {
-        const isDead = super.takeDamage(amount);
-        if (isDead) {
-            this.segments.forEach((seg, i) => {
-                setTimeout(() => {
-                    seg.forceDestroy();
-                }, (i + 1) * 80);
-            });
-        }
-        return isDead;
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        return new WormEnemy(game, x, y, bType, data.length ?? WormEnemy.DEFAULT_LENGTH);
-    }
-}
-
-
 /**
  * GaleArtillery: 画面上部に陣取り、強風（自機を横へ押し流す風圧効果）を発生させる固定砲台
  */
@@ -450,8 +329,8 @@ export class GaleArtilleryEnemy extends Enemy {
 
     constructor(game, x, y, bulletType, stopY = 80) {
         super(game, x, y, bulletType, 4); // HP = 4
-        this.width = 80;
-        this.height = (155 / 291) * 80;
+        this.width = 160;
+        this.height = (155 / 291) * 160;
         this.stopY = stopY;
         this.timer = 0;
         this.state = 'MOVE_IN';
@@ -491,7 +370,7 @@ export class GaleArtilleryEnemy extends Enemy {
                     this.shoot(game);
                 }
 
-                if (this.timer >= 300) {
+                if (this.timer >= 150) {
                     this.state = 'RETREAT';
                 }
                 break;
@@ -541,11 +420,9 @@ export class GaleArtilleryEnemy extends Enemy {
 // ==========================================
 ENEMY_REGISTRY.set('straight', StraightEnemy);
 ENEMY_REGISTRY.set('sine', SineEnemy);
+ENEMY_REGISTRY.set('scout', ScoutEnemy);
 ENEMY_REGISTRY.set('stationary', StationaryEnemy);
 ENEMY_REGISTRY.set('assault', AssaultEnemy);
 ENEMY_REGISTRY.set('hunter', HunterEnemy);
 ENEMY_REGISTRY.set('shield', ShieldEnemy);
-ENEMY_REGISTRY.set('rock', RockEnemy);
-ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
-ENEMY_REGISTRY.set('worm', WormEnemy);
 ENEMY_REGISTRY.set('gale_artillery', GaleArtilleryEnemy);

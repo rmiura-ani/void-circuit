@@ -147,7 +147,7 @@ export class GateKeeperEnemy extends Enemy {
 
 /**
  * STAGE-7 ボス: 最終要塞機械心臓（Absolute Core / BossEnemy_07）
- * 特徴: HP33%以下で変形演出に入り【第2形態（Overlord）】へと覚醒・変身するラストボス
+ * 特徴: HP50%以下で変形演出に入り【第2形態（Overlord）】へと覚醒・変身するラストボス
  */
 export class BossEnemy_07 extends BossEnemy {
     // 形態に応じて自動的に画像パスを切り替え
@@ -200,8 +200,8 @@ export class BossEnemy_07 extends BossEnemy {
                     this.shoot(game);
                 }
 
-                // ⚡ ギミック：HPが33%を切ると第2形態変形演出を発動
-                if (this.hp < this.maxHp / 3) {
+                // ⚡ ギミック：HPが50%を切ると第2形態変形演出を発動
+                if (this.hp < this.maxHp / 2) {
                     this.formPhase = 2;
                     this.state = 'TRANSFORM';
                     this.timer = 0;

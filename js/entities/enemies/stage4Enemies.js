@@ -156,6 +156,9 @@ export class SandPillarEnemy extends Enemy {
         this.width = 64;
         this.height = (467/394) * 64;
         this.speedY = 0.5;
+
+        // 💡 フラッシュ用タイマー（フレーム数）
+        this.hitFlashTimer = 0;
     }
 
     update(game) {
@@ -163,12 +166,36 @@ export class SandPillarEnemy extends Enemy {
 
         this.y += this.speedY;
 
+        // 💡 被弾フラッシュのタイマー更新
+        if (this.hitFlashTimer > 0) {
+            this.hitFlashTimer--;
+        }
     }
 
     /** 砂の防壁：ダメージ軽減処理 */
     takeDamage(amount) {
         const reducedAmount = Math.max(1, Math.floor(amount * 0.5));
+
+        // 💡 被弾時にフラッシュタイマーをセット（例: 5フレーム間光る）
+        this.hitFlashTimer = 5;
+
         return super.takeDamage(reducedAmount);
+    }
+
+    /** 💡 被弾時に発光させる描画処理 */
+    draw(ctx) {
+        ctx.save();
+
+        if (this.hitFlashTimer > 0) {
+            // 方法1: 明度とコントラストを大きく上げて全体を白く輝かせる（おすすめ）
+            ctx.filter = 'brightness(3.0) contrast(1.5)';
+            
+            // （参考）もし黄色やオレンジっぽくシールド風に光らせたい場合はこちら：
+            // ctx.filter = 'brightness(2.0) drop-shadow(0px 0px 10px #FFD700)';
+        }
+
+        super.draw(ctx);
+        ctx.restore();
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -245,6 +272,260 @@ export class GigaOrbEnemy extends Enemy {
     }
 }
 
+
+/**
+ * RockEnemy: 超高速で垂直落下してくるデブリ・岩石型トラップ
+ */
+export class RockEnemy extends Enemy {
+    static DEFAULT_SPEED_Y = 6.0;
+
+    get imageName() { return "enemy_rock.webp"; }
+
+    constructor(game, x, y, bulletType, speedY = RockEnemy.DEFAULT_SPEED_Y) {
+        super(game, x, y, 'none', 1);
+        this.speedX = -0.5
+        this.speedY = speedY;
+    }
+
+    update(game) {
+        if (!this.active) return;
+        this.x += this.speedX;
+        this.y += this.speedY;
+    }
+
+    static create(game, x, y, bType, data = {}) {
+        return new RockEnemy(game, x, y, bType, data.speedY ?? RockEnemy.DEFAULT_SPEED_Y);
+    }
+}
+
+/**
+ * WormSegment: 連結エネミー（多関節）の胴体・尻尾パーツ
+ */
+export class WormSegment extends Enemy {
+    static SEGMENT_SPACING = 20;
+
+    constructor(game, head, index, isTail = false) {
+        // 1. super 呼び出し前に画像キーを特定
+        const imageKey = isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp";
+
+        // 2. 親クラス Enemy の初期化（第4引数は画像キーまたはbulletTypeとして親の仕様に合わせる）
+        super(game, head.x, head.y - index * WormSegment.SEGMENT_SPACING, 'none', 1);
+
+        this.head = head;
+        this.index = index;
+        this.isTail = isTail;
+        this.customImageKey = imageKey;
+
+        // 3. 正しいアセットの割り当て
+        if (game?.assets) {
+            this.image = game.assets.get(imageKey);
+        }
+
+        // サイズの初期化
+        this.width = head.width || 24;
+        this.height = head.height || 24;
+    }
+
+    // Enemy クラスが imageName を参照する場合のフォールバック
+    get imageName() {
+        return this.customImageKey || (this.isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp");
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        if (this.head?.active) {
+            const targetIndex = this.index * 6;
+            const history = this.head.history;
+
+            if (history && history.length > targetIndex) {
+                const pos = history[targetIndex];
+                this.x = pos.x;
+                this.y = pos.y;
+                this.angle = pos.angle;
+                this.isSubmerged = pos.isSubmerged;
+            } else {
+                this.x = this.head.x;
+                this.y = this.head.y - (this.index * WormSegment.SEGMENT_SPACING);
+                this.angle = this.head.angle || 0;
+            }
+        } else {
+            this.active = false;
+        }
+    }
+
+    takeDamage(amount) {
+        if (this.isSubmerged) return false;
+        const isDead = super.takeDamage(amount);
+        if (isDead && this.head) {
+            this.head.removeSegment(this);
+        }
+        return isDead;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+
+        ctx.save();
+        if (this.isSubmerged) {
+            ctx.globalAlpha = 0.3;
+        }
+
+        // 進行方向に応じた回転
+        if (this.angle !== undefined) {
+            const centerX = this.x + this.width / 2;
+            const centerY = this.y + this.height / 2;
+            ctx.translate(centerX, centerY);
+            ctx.rotate(this.angle - Math.PI / 2);
+            ctx.translate(-centerX, -centerY);
+        }
+
+        // 描画自体は Enemy の共通処理（super.draw）に任せる
+        super.draw(ctx);
+        ctx.restore();
+    }
+
+    forceDestroy() {
+        this.active = false;
+        this.onDie(this.game, true);
+    }
+}
+
+/**
+ * WormEnemy: 連結エネミー（頭部）
+ */
+export class WormEnemy extends Enemy {
+    static DEFAULT_LENGTH = 6;
+
+    get imageName() { return "stage-4/enemy_worm_head.webp"; }
+
+    constructor(game, x, y, bulletType, length = WormEnemy.DEFAULT_LENGTH, hp = 5) {
+        super(game, x, y, bulletType, hp);
+
+        // 胴体・尻尾パーツの画像を確実にプリロードしておく
+        if (game?.assets) {
+            game.assets.get("stage-4/enemy_worm_body.webp");
+            game.assets.get("stage-4/enemy_worm_tail.webp");
+        }
+
+        this.baseX = x;
+        this.speedY = 1.8;
+        this.moveDirectionY = 1;
+        this.timer = Math.random() * 100;
+
+        this.angle = 0;
+        this.isSubmerged = false;
+
+        this.history = [];
+        this.maxHistory = length * 10;
+
+        this.segments = [];
+        if (game?.entities) {
+            for (let i = 1; i < length; i++) {
+                const isTail = (i === length - 1);
+                const seg = new WormSegment(game, this, i, isTail);
+                this.segments.push(seg);
+                game.entities.push(seg);
+            }
+        }
+    }
+
+    update(game) {
+        if (!this.active) return;
+        this.timer += 0.04;
+
+        const gameHeight = game?.height || 600;
+        const upperThreshold = gameHeight * 0.25;
+        const lowerThreshold = gameHeight * 0.66;
+
+        if (this.y >= lowerThreshold && this.moveDirectionY > 0) {
+            this.moveDirectionY = -1;
+            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (Math.random() - 0.5) * 120));
+        }
+
+        if (this.y <= upperThreshold && this.moveDirectionY < 0) {
+            this.moveDirectionY = 1;
+            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (Math.random() - 0.5) * 120));
+        }
+
+        const prevX = this.x;
+        const prevY = this.y;
+
+        this.y += this.speedY * this.moveDirectionY;
+        this.x = this.baseX + Math.sin(this.timer * 1.5) * 80;
+
+        const dx = this.x - prevX;
+        const dy = this.y - prevY;
+        this.angle = Math.atan2(dy, dx);
+
+        const wave = Math.sin(this.timer * 2.5);
+        this.isSubmerged = wave > 0.2;
+
+        this.history.unshift({
+            x: this.x,
+            y: this.y,
+            angle: this.angle,
+            isSubmerged: this.isSubmerged
+        });
+
+        if (this.history.length > this.maxHistory) {
+            this.history.pop();
+        }
+
+        if (!this.isSubmerged && Math.random() < 0.025) {
+            this.shoot(game);
+        }
+    }
+
+    takeDamage(amount) {
+        if (this.isSubmerged) return false;
+        return super.takeDamage(amount);
+    }
+
+    draw(ctx) {
+        ctx.save();
+        if (this.isSubmerged) {
+            ctx.globalAlpha = 0.3;
+        }
+
+        if (this.angle !== undefined) {
+            const centerX = this.x + this.width / 2;
+            const centerY = this.y + this.height / 2;
+            ctx.translate(centerX, centerY);
+            ctx.rotate(this.angle - Math.PI / 2);
+            ctx.translate(-centerX, -centerY);
+        }
+
+        super.draw(ctx);
+        ctx.restore();
+    }
+
+    removeSegment(seg) {
+        const idx = this.segments.indexOf(seg);
+        if (idx !== -1) {
+            this.segments.splice(idx, 1);
+            this.segments.forEach((s, i) => {
+                s.index = i + 1;
+            });
+        }
+    }
+
+    takeDamageAndCheckDeath(amount) {
+        const isDead = super.takeDamage(amount);
+        if (isDead) {
+            this.segments.forEach((seg, i) => {
+                setTimeout(() => {
+                    seg.forceDestroy();
+                }, (i + 1) * 80);
+            });
+        }
+        return isDead;
+    }
+
+    static create(game, x, y, bType, data = {}) {
+        return new WormEnemy(game, x, y, bType, data.length ?? WormEnemy.DEFAULT_LENGTH, data.hp ?? 5);
+    }
+}
 
 // ==========================================
 // 2. STAGE-4 ボス実体
@@ -339,4 +620,6 @@ ENEMY_REGISTRY.set('relic_prism', RelicPrismEnemy);
 ENEMY_REGISTRY.set('mirage_crawler', MirageCrawlerEnemy);
 ENEMY_REGISTRY.set('sand_pillar', SandPillarEnemy);
 ENEMY_REGISTRY.set('giga_orb', GigaOrbEnemy);
+ENEMY_REGISTRY.set('worm', WormEnemy);
+ENEMY_REGISTRY.set('rock', RockEnemy);
 ENEMY_REGISTRY.set('boss_04', BossEnemy_04);

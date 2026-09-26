@@ -30,7 +30,7 @@ const GAME_CONFIG = {
     PLAYER_SPAWN_INVINCIBLE_TIME: 180,
     FPS: 60,
     DIFFICULTY_PARAMS: {
-        'EASY': { enemySpeed: 0.8, fireRate: 0.7 },
+        'EASY': { enemySpeed: 0.7, fireRate: 0.5 },
         'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
         'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
         'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
