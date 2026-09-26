@@ -17,7 +17,7 @@ import { Game } from './game.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.65";
+        this.VERSION = "0.66";
         this.canvas = document.getElementById('game-canvas');
 
         // アセット参照パスの判別

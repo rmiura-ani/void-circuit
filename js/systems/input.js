@@ -21,6 +21,8 @@ export class InputManager {
         this.touchX = null;
         this.touchY = null;
         this.isTouching = false;
+        this.isRightMouseDown = false;     // 右クリック長押し判定用
+        this.rightClickTriggered = false;  // 右クリック単発トリガー用
         this.isCanvasOutClicked = false;
 
         this._abortController = new AbortController();
@@ -36,6 +38,13 @@ export class InputManager {
 
         const updatePos = (e) => this._handleCoordinate(e);
 
+        // コンテキストメニューの無効化（右クリックメニューを出さない）
+        if (this.canvas) {
+            this.canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            }, { signal });
+        }
+
         // 画面外クリック検出
         window.addEventListener('mousedown', (e) => {
             if (e.target !== this.canvas) {
@@ -48,17 +57,29 @@ export class InputManager {
         // マウス (canvas内 / window全体)
         if (this.canvas) {
             this.canvas.addEventListener('mousedown', (e) => {
-                this.isTouching = true;
-                updatePos(e);
+                if (e.button === 0) {
+                    // 左クリック
+                    this.isTouching = true;
+                    updatePos(e);
+                } else if (e.button === 2) {
+                    // 右クリック
+                    this.isRightMouseDown = true;
+                    this.rightClickTriggered = true;
+                    updatePos(e);
+                }
             }, { signal });
         }
 
         window.addEventListener('mousemove', (e) => {
-            if (this.isTouching) updatePos(e);
+            if (this.isTouching || this.isRightMouseDown) updatePos(e);
         }, { signal });
 
-        window.addEventListener('mouseup', () => {
-            this.isTouching = false;
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                this.isTouching = false;
+            } else if (e.button === 2) {
+                this.isRightMouseDown = false;
+            }
         }, { signal });
 
         // タッチ (iOS/Android 向け最適化)
@@ -81,7 +102,7 @@ export class InputManager {
             };
 
             this.canvas.addEventListener('touchend', resetTouch, { signal });
-                this.canvas.addEventListener('touchcancel', resetTouch, { signal });
+            this.canvas.addEventListener('touchcancel', resetTouch, { signal });
         }
     }
 
@@ -89,6 +110,16 @@ export class InputManager {
         const clicked = this.isCanvasOutClicked;
         this.isCanvasOutClicked = false;
         return clicked;
+    }
+
+    /**
+     * 右クリックが押されたかを判定し、判定後にフラグをリセットします（単発トリガー用）
+     * @returns {boolean}
+     */
+    getAndResetRightClick() {
+        const triggered = this.rightClickTriggered;
+        this.rightClickTriggered = false;
+        return triggered;
     }
 
     _handleCoordinate(e) {
@@ -114,5 +145,7 @@ export class InputManager {
         this._abortController.abort();
         this.keys.clear();
         this.isTouching = false;
+        this.isRightMouseDown = false;
+        this.rightClickTriggered = false;
     }
 }

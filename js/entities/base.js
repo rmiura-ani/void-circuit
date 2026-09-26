@@ -70,52 +70,56 @@ export class AssetManager {
     get(key) {
         if (!key) return null;
 
+        // キャッシュにある場合
         if (this.imageCache[key]) {
-            return this.imageCache[key];
+            const cachedImg = this.imageCache[key];
+            // 💡 エラーで破綻した画像（naturalWidth === 0 かつ complete === true）なら null を返す
+            if (cachedImg.complete && cachedImg.naturalWidth === 0) {
+                return null;
+            }
+            return cachedImg;
         }
+
         if (key.includes("LOOP") || key.includes("BOSS_TRIGGER") || !key.includes(".")) {
             return null;
         }
-        
-        if (!this.loadingPromises[key]) {
-            this.loadingPromises[key] = new Promise(resolve => {
-                const img = new Image();
-                img.crossOrigin = "anonymous";
 
-                img.onload = () => {
-                    this.imageCache[key] = img;
-                    console.log(`[Assets] Ready: ${key} (from ${img.src})`);
-                    resolve(img);
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        this.imageCache[key] = img;
+
+        this.loadingPromises[key] = new Promise(resolve => {
+            img.onload = () => {
+                console.log(`[Assets] Ready: ${key} (from ${img.src})`);
+                resolve(img);
+            };
+
+            const handleFinalError = () => {
+                console.error(`[Assets] ❌ Load failed completely: ${key}`);
+                delete this.imageCache[key];
+                delete this.loadingPromises[key];
+                resolve(null);
+            };
+
+            if (this.stagePath) {
+                const stageUrl = `${this.basePath}${this.stagePath}/${key}`;
+
+                img.onerror = () => {
+                    const fallbackUrl = `${this.basePath}${key}`;
+
+                    img.onerror = handleFinalError;
+                    img.src = fallbackUrl;
                 };
 
-                if (this.stagePath) {
-                    const stageUrl = `${this.basePath}${this.stagePath}/${key}`;
-                    
-                    img.onerror = () => {
-                        const fallbackUrl = `${this.basePath}${key}`;
-                        
-                        img.onerror = () => {
-                            console.error(`[Assets] ❌ Load failed completely: ${key}`);
-                            this.loadingPromises[key] = null;
-                            resolve(null);
-                        };
-                        img.src = fallbackUrl;
-                    };
-                    
-                    img.src = stageUrl;
-                } else {
-                    const defaultUrl = `${this.basePath}${key}`;
-                    img.onerror = () => {
-                        console.error(`[Assets] ❌ Load failed: ${defaultUrl}`);
-                        this.loadingPromises[key] = null;
-                        resolve(null);
-                    };
-                    img.src = defaultUrl;
-                }
-            });
-        }
+                img.src = stageUrl;
+            } else {
+                const defaultUrl = `${this.basePath}${key}`;
+                img.onerror = handleFinalError;
+                img.src = defaultUrl;
+            }
+        });
 
-        return null; 
+        return img;
     }
 
     /** 💡 キャッシュ明示的クリアメソッド */

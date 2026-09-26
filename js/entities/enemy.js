@@ -177,7 +177,8 @@ export class Enemy extends Entity {
             ctx.globalAlpha = (Math.floor(Date.now() / 33) % 2 === 0) ? 0.15 : 0.60;
         }
 
-        if (this.isLoaded && !this.loadError) {
+        // 💡 画像が存在し、読み込みが完了しており、かつ破損していない (naturalWidth > 0) ことを直接確認
+        if (this.image && this.image.complete && this.image.naturalWidth > 0) {
             ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
         } else {
             ctx.fillStyle = this.loadError ? '#F00' : '#444';

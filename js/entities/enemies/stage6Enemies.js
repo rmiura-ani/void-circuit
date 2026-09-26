@@ -237,10 +237,10 @@ export class BossEnemy_06 extends BossEnemy {
         
         this.isBoss = true;
         this.maxHp = hp; // maxHp を確実に設定
-        this.width = 240;
-        this.height = 140;
-        this.hitWidth = 200;
-        this.hitHeight = 100;
+        this.width = (802/322)*100;
+        this.height = 100;
+        this.hitWidth = 220;
+        this.hitHeight = 80;
 
         this.state = 'APPEAR';
         this.timer = 0;

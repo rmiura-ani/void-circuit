@@ -108,7 +108,7 @@ export class GateKeeperEnemy extends Enemy {
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 8); // HP = 8
-        this.width = 64;
+        this.width = (528/312)*48;
         this.height = 48;
         this.speedX = 1.5;
         this.timer = 0;
@@ -159,10 +159,10 @@ export class BossEnemy_07 extends BossEnemy {
         super(game, x, -160, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
         this.maxHp = hp; // HP最大値を明示的に設定（第2形態移行判定用）
-        this.width = 160;
-        this.height = 160;
-        this.hitWidth = 120;
-        this.hitHeight = 120;
+        this.width = (747/312)*120;
+        this.height = 120;
+        this.hitWidth = 270;
+        this.hitHeight = 100;
 
         this.state = 'APPEAR';
         this.timer = 0;
@@ -213,6 +213,11 @@ export class BossEnemy_07 extends BossEnemy {
                 this.isInvincible = true;
                 this.x = this.baseX + Math.sin(this.timer * 0.6) * 6; // 超高速振動
 
+                // 💡 最初の1フレーム目で第2形態画像をバックグラウンドロード開始
+                if (this.timer === 1 && this.game && this.game.assets) {
+                    this.game.assets.get("enemy_boss_07_phase2.webp");
+                }
+
                 if (this.timer > 120) {
                     this.isInvincible = false; // 無敵解除
                     this.state = 'FINAL_OVERLORD';
@@ -245,12 +250,19 @@ export class BossEnemy_07 extends BossEnemy {
 
     draw(ctx) {
         ctx.save();
+
+        // 💡 描画直前に現在の formPhase（imageName）に応じた最新の画像を AssetManager から再取得して更新
+        if (this.game && this.game.assets) {
+            this.image = this.game.assets.get(this.imageName);
+        }
+
         if (this.state === 'TRANSFORM') {
             const flash = 2.0 + Math.sin(this.timer * 0.8) * 1.5;
             ctx.filter = `contrast(3) brightness(${flash})`;
         } else if (this.formPhase === 2) {
             ctx.filter = 'saturate(3) contrast(1.4) drop-shadow(0px 0px 18px #FF0055)';
         }
+
         super.draw(ctx);
         ctx.restore();
     }

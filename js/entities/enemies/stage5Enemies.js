@@ -51,6 +51,8 @@ export class CellMitosisEnemy extends Enemy {
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 2); // HP = 2
         this.speedY = 1.2;
+        this.width = (220/111)*32;
+        this.height = 32;
     }
 
     update(game) {
@@ -134,6 +136,8 @@ export class BioTentacleEnemy extends Enemy {
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 4); // HP = 4
+        this.width = (461/133)*32;
+        this.height = 32;
         this.baseX = x;
         this.timer = 0;
         this.speedY = 1.0;
@@ -166,6 +170,8 @@ export class LeechParasiteEnemy extends Enemy {
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 1); // HP = 1
+        this.width = (250/123)*32;
+        this.height = 32;
         this.speed = 1.2;
         this.isParasite = true; // 衝突判定側でデバフ処理を分岐するためのフラグ例
     }
@@ -203,6 +209,42 @@ export class HeartNucleusEnemy extends Enemy {
         this.height = 48;
         this.speedY = 0.4; // 非常にゆったり降下
         this.timer = 0;
+        this.suctionParticles = [];
+        const particleCount = 20; // 線の本数
+
+        for (let i = 0; i < particleCount; i++) {
+            this.suctionParticles.push({
+                angle: Math.random() * Math.PI * 2,    // 360度ランダムな方向
+                distance: 30 + Math.random() * 120,    // 敵中心からの初期距離（半径）
+                speed: 2 + Math.random() * 3,          // 吸い込まれるスピード
+                length: 10 + Math.random() * 15        // 集中線の長さ
+            });
+        }
+    }
+
+    // 吸い込みを行う敵の update(game) などの中で呼び出す
+    _applySuctionToPlayer() {
+        // 敵中心とプレイヤー中心の距離を計算
+        const enemyCenterX = this.x + this.width / 2;
+        const enemyCenterY = this.y + this.height / 2;
+        const playerCenterX = this.game.player.x + this.game.player.width / 2;
+        const playerCenterY = this.game.player.y + this.game.player.height / 2;
+
+        const dx = enemyCenterX - playerCenterX;
+        const dy = enemyCenterY - playerCenterY;
+        const distance = Math.hypot(dx, dy);
+
+        // 吸い込みの有効範囲（例: 200px以内）
+        const suctionRadius = 600;
+
+        if (distance < suctionRadius && distance > 0) {
+            // 近いほど強く吸い込まれる（強さの調整：2.5〜4.0程度がおすすめ）
+            const force = (1 - distance / suctionRadius) * 2.5;
+
+            // ベクトルを正規化して吸い込み力を設定
+            this.game.player.suctionForceX += (dx / distance) * force;
+            this.game.player.suctionForceY += (dy / distance) * force;
+        }
     }
 
     update(game) {
@@ -210,6 +252,7 @@ export class HeartNucleusEnemy extends Enemy {
         this.timer++;
 
         this.y += this.speedY;
+        this._applySuctionToPlayer();
 
         // 120F（約2秒）ごとに周囲のエネルギーを吸い上げてHPを1回復（最大HPは超えない）
         if (this.timer % 120 === 0 && this.hp < this.maxHp) {
@@ -222,6 +265,46 @@ export class HeartNucleusEnemy extends Enemy {
             this.bulletType = 'eight-way';
             this.shoot(game);
         }
+    }
+
+    draw(ctx) {
+        super.draw(ctx); // 本体描画
+
+        // 🌀 吸い込み状態（例: BLACK_HOLE や SUCTION 状態）の時だけ描画
+        ctx.save();
+        ctx.strokeStyle = 'rgba(220, 180, 255, 0.6)'; // 紫/ピンクがかったうっすら光る線
+        ctx.lineWidth = 1.5;
+
+        // 敵の中心座標を取得
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+
+        for (const p of this.suctionParticles) {
+            // 1. 中心に向かって距離を縮める
+            p.distance -= p.speed;
+
+            // 2. 中心（または一定の半径）まで到達したら外側にリスポーン
+            if (p.distance <= 10) {
+                p.distance = 120 + Math.random() * 30; // 再び外側から発生
+                p.angle = Math.random() * Math.PI * 2; // 新しい角度にランダム配置
+            }
+
+            // 3. 始点（線の外側）と終点（線の中央寄り）の位置を三角関数（Math.cos / Math.sin）で計算
+            const startX = centerX + Math.cos(p.angle) * p.distance;
+            const startY = centerY + Math.sin(p.angle) * p.distance;
+
+            // 線の末尾は、中心に向かって少し短く伸ばす
+            const endX = centerX + Math.cos(p.angle) * (p.distance - p.length);
+            const endY = centerY + Math.sin(p.angle) * (p.distance - p.length);
+
+            // 4. 集中線を描画
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        }
+
+        ctx.restore();
     }
 
     static create(game, x, y, bType, data = {}) {
@@ -248,7 +331,7 @@ export class BossEnemy_05 extends BossEnemy {
         super(game, x, startY, hp, timeLimit, timeMultiplier);
         
         this.isBoss = true;
-        this.width = 110;
+        this.width = (818/291)*110;
         this.height = 110;
         this.hitWidth = 90;
         this.hitHeight = 90;
@@ -258,6 +341,45 @@ export class BossEnemy_05 extends BossEnemy {
         this.baseX = x;
         this.hasSplit = false;
         this.shotCount = 0;
+    }
+
+    /**
+     * 部位ごとの判定領域とダメージ倍率（マルチヒットボックス）
+     * 配列の先頭（HEAD）から判定評価を行うことで、頭と本体が重なる領域でも頭の判定が優先されます。
+     */
+    getHitboxes() {
+            // 🎯 弱点: 目玉 (被弾ダメージ 2倍)
+        const headW = 70;
+        const headH = 120;
+        const headX = this.x + (this.width - headW) / 2;
+        const headY = this.y + this.height - headH; // 下端に合わせて飛び出させる
+
+            // 🛡️ 通常: サイド (被弾ダメージ 1倍)
+        const bodyW = 290;
+        const bodyH = 70;
+        const bodyX = this.x + (this.width - bodyW) / 2;
+        const bodyY = this.y + 10;
+
+        return [
+            // 🎯 弱点: 目玉 (被弾ダメージ 2倍)
+            {
+                part: 'HEAD',
+                multiplier: 2.0,
+                x: headX,
+                y: headY,
+                width: headW,
+                height: headH
+            },
+            // 🛡️ 通常: サイド (被弾ダメージ 1倍)
+            {
+                part: 'BODY',
+                multiplier: 1.0,
+                x: bodyX,
+                y: bodyY,
+                width: bodyW,
+                height: bodyH
+            }
+        ];
     }
 
     update(game) {

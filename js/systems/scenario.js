@@ -272,9 +272,6 @@ export class ScenarioManager {
             // YAML等で x が明示的に指定されている場合：中心指定とみなして左上座標へシフト
             if (rawX !== undefined && rawX !== null) {
                 enemy.x = rawX - enemy.width / 2;
-            } else if (data.type !== 'wind_slicer') {
-                // x が未指定の一般的なザコ敵：画面幅からはみ出さないランダム位置に調整
-                enemy.x = Math.random() * Math.max(0, game.width - enemy.width);
             }
             // (※ wind_slicer のように x 未指定で独自の出現ロジックを持つ敵は、何もしないことで WindSlicer 側の初期化処理に任せる)
 

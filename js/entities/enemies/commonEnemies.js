@@ -108,7 +108,7 @@ export class StationaryEnemy extends Enemy {
 
     constructor(game, x, y, bulletType, hp = 1, stopY = StationaryEnemy.DEFAULT_STOP_Y, waitTime = StationaryEnemy.DEFAULT_WAIT_TIME) {
         super(game, x, y, bulletType, hp);
-        this.baseX = x;
+        this.baseX = x; // 🎯 画面生成時点での初期X座標
         this.stopY = stopY;
         this.waitTime = waitTime;
         this.stateTimer = 0;
@@ -123,11 +123,16 @@ export class StationaryEnemy extends Enemy {
         switch (this.state) {
             case 'MOVE_IN':
                 this.y += 2;
-                if (this.y >= this.stopY) this.state = 'STOP';
+                // MOVE_IN から STOP に切り替わる瞬間に、補正済みの this.x を baseX として再記憶する
+                if (this.y >= this.stopY) {
+                    this.state = 'STOP';
+                    this.baseX = this.x; // 👈 🎯 これを追加！spawnEnemyで補正された後の位置をベースにする
+                }
                 break;
 
             case 'STOP':
                 this.stateTimer++;
+                // baseX を基準に揺らす（これで補正位置からズレなくなる）
                 this.x = this.baseX + Math.sin(this.stateTimer * 0.2) * 2;
 
                 // 静止中のみ射撃タイマー更新
@@ -159,7 +164,6 @@ export class StationaryEnemy extends Enemy {
         );
     }
 }
-
 
 /**
  * AssaultEnemy: 直進後、自機の高度に合わせて急激に軌道修正して体当たりを狙う突撃型
@@ -208,7 +212,7 @@ export class AssaultEnemy extends Enemy {
  * HunterEnemy: 執拗に自機のX座標を追従しながら降下してくるハンター型
  */
 export class HunterEnemy extends Enemy {
-    get imageName() { return "enemy_hunter.webp"; }
+    get imageName() { return ".webp"; }
 
     constructor(game, x, y, bulletType) {
         super(game, x, y, bulletType, 2); 
@@ -281,43 +285,6 @@ export class ShieldEnemy extends Enemy {
         return new ShieldEnemy(game, x, y, bType);
     }
 }
-
-
-/**
- * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
- */
-export class ScoutEnemy extends Enemy {
-    get imageName() { return "enemy_scout.webp"; }
-
-    constructor(game, x, y, bulletType, isLeftToRight = true) {
-        super(game, x, y, bulletType, 1);
-        this.timer = 0;
-        this.isLeft = isLeftToRight;
-        this.x = isLeftToRight ? -32 : (game?.width ?? 640) + 32; 
-        this.y = 80;
-        this.hasShot = false;
-    }
-
-    update(game) {
-        if (!this.active) return;
-
-        this.timer += 0.04;
-        this.x += this.isLeft ? 3.5 : -3.5;
-        this.y = 80 + Math.sin(this.timer) * 120;
-
-        // U字最下点付近で1回だけ射撃
-        if (Math.abs(this.timer - Math.PI / 2) < 0.05 && !this.hasShot) {
-            this.shoot(game); 
-            this.hasShot = true;
-        }
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        const isLeft = data.isLeft ?? true;
-        return new ScoutEnemy(game, x, y, bType, isLeft);
-    }
-}
-
 
 // ==========================================
 // 2. 特殊ギミック・環境障害物タイプ
@@ -578,7 +545,6 @@ ENEMY_REGISTRY.set('stationary', StationaryEnemy);
 ENEMY_REGISTRY.set('assault', AssaultEnemy);
 ENEMY_REGISTRY.set('hunter', HunterEnemy);
 ENEMY_REGISTRY.set('shield', ShieldEnemy);
-ENEMY_REGISTRY.set('scout', ScoutEnemy);
 ENEMY_REGISTRY.set('rock', RockEnemy);
 ENEMY_REGISTRY.set('debris', MineDebrisEnemy);
 ENEMY_REGISTRY.set('worm', WormEnemy);

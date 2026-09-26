@@ -9,9 +9,50 @@
  */
 import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 
-// ========================================================
-// BossEnemy_01 (アイアン・ヴェイン防衛コア)
-// ========================================================
+// ==========================================
+// 1. STAGE-1 固有のザコ・中型敵クラス群
+// ==========================================
+/**
+ * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
+ */
+export class ScoutEnemy extends Enemy {
+    get imageName() { return "enemy_scout.webp"; }
+
+    constructor(game, x, y, bulletType, isLeft = true) {
+        super(game, x, y, bulletType, 1);
+        this.timer = 0;
+        this.isLeft = isLeft;
+        this.x = isLeft ? -32 : (game?.width ?? 640) + 32; 
+        this.hasShot = false;
+    }
+
+    update(game) {
+        if (!this.active) return;
+
+        this.timer += 0.04;
+        this.x += this.isLeft ? 3.5 : -3.5;
+        this.y = 80 + Math.sin(this.timer) * 120;
+
+        // U字最下点付近で1回だけ射撃
+        if (Math.abs(this.timer - Math.PI / 2) < 0.05 && !this.hasShot) {
+            this.shoot(game); 
+            this.hasShot = true;
+        }
+    }
+
+    static create(game, x, y, bType, data = {}) {
+        const isLeft = data.isLeft ?? true;
+        return new ScoutEnemy(game, x, y, bType, isLeft);
+    }
+}
+
+
+/// ==========================================
+// 2. STAGE-1 ボス実体
+// ==========================================
+/**
+ * STAGE-3 ボス: アイアン・ヴェイン防衛コア（BossEnemy_01）
+ */
 export class BossEnemy_01 extends BossEnemy {
     get imageName() { return "enemy_boss_01.webp"; }
 
@@ -161,4 +202,5 @@ export class BossEnemy_01 extends BossEnemy {
 // ========================================================
 // ENEMY_REGISTRY へのボス登録
 // ========================================================
+ENEMY_REGISTRY.set('scout', ScoutEnemy);
 ENEMY_REGISTRY.set("boss_01", BossEnemy_01);
