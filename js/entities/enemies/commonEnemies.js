@@ -17,14 +17,9 @@ import { Enemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  * StraightEnemy: 直進型。毎フレーム等速直線運動を行う最も基本的な敵
  */
 export class StraightEnemy extends Enemy {
-    static DEFAULT_SPEED = 2.5;
+    speed = 2.5;
 
     get imageName() { return "enemy_straight.webp"; }
-    
-    constructor(game, x, y, bulletType, hp = 1) {
-        super(game, x, y, bulletType, hp);
-        this.speed = StraightEnemy.DEFAULT_SPEED; 
-    }
 
     update(game) {
         if (!this.active) return;
@@ -32,20 +27,12 @@ export class StraightEnemy extends Enemy {
         // 直進移動
         this.y += this.speed;
 
-        // 射撃判定
-        const isInFiringRange = this.y > 20 && this.y < 475;
-        if (isInFiringRange) {
-            this.shootTimer++;
-            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-            if (this.shootTimer >= currentInterval) {
-                this.shoot(game);
-                this.shootTimer = 0;
-            }
-        }
+        // 射撃判定含む基本更新
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new StraightEnemy(game, x, y, bType, data.hp ?? 1);
+    static create(game, bType, hp, data = {}) {
+        return new StraightEnemy(game, bType, hp);
     }
 }
 
@@ -54,42 +41,27 @@ export class StraightEnemy extends Enemy {
  * SineEnemy: サイン波移動型。横揺れしながら降下する
  */
 export class SineEnemy extends Enemy {
-    static DEFAULT_AMPLITUDE = 50;
-    static DEFAULT_FREQUENCY = 0.05;
+    phase = 0;
+    amplitude = 50;
+    frequency = 0.05;
+    speedY = 2.0;
 
     get imageName() { return "enemy_sine.webp"; }
-
-    constructor(game, x, y, bulletType, phase = 0) {
-        super(game, x, y, bulletType, 1);
-        this.baseX = x;
-        this.phase = phase;
-        this.amplitude = SineEnemy.DEFAULT_AMPLITUDE;
-        this.frequency = SineEnemy.DEFAULT_FREQUENCY;
-        this.speedY = 2.0;
-    }
 
     update(game) {
         if (!this.active) return;
 
-        // サイン波移動
+        // サイン波移動 (setStartPosition で記憶した startX を基準に揺らす)
         this.y += this.speedY;
-        this.x = this.baseX + Math.sin(this.phase) * this.amplitude;
+        this.x = this.startX + Math.sin(this.phase) * this.amplitude;
         this.phase += this.frequency;
 
-        // 射撃判定
-        const isInFiringRange = this.y > 20 && this.y < 475;
-        if (isInFiringRange) {
-            this.shootTimer++;
-            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-            if (this.shootTimer >= currentInterval) {
-                this.shoot(game);
-                this.shootTimer = 0;
-            }
-        }
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new SineEnemy(game, x, y, bType, data.phase ?? 0);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new SineEnemy(game, bType, hp);
+        if (data.phase !== undefined) enemy.phase = data.phase;
         if (data.amplitude !== undefined) enemy.amplitude = data.amplitude;
         if (data.frequency !== undefined) enemy.frequency = data.frequency;
         return enemy;
@@ -101,15 +73,11 @@ export class SineEnemy extends Enemy {
  * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
  */
 export class ScoutEnemy extends Enemy {
-    get imageName() { return "enemy_scout.webp"; }
+    timer = 0;
+    isLeft = true;
+    hasShot = false;
 
-    constructor(game, x, y, bulletType, isLeft = true) {
-        super(game, x, y, bulletType, 1);
-        this.timer = 0;
-        this.isLeft = isLeft;
-        this.x = isLeft ? -32 : (game?.width ?? 640) + 32; 
-        this.hasShot = false;
-    }
+    get imageName() { return "enemy_scout.webp"; }
 
     update(game) {
         if (!this.active) return;
@@ -123,11 +91,17 @@ export class ScoutEnemy extends Enemy {
             this.shoot(game); 
             this.hasShot = true;
         }
+
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const isLeft = data.isLeft ?? true;
-        return new ScoutEnemy(game, x, y, bType, isLeft);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new ScoutEnemy(game, bType, hp);
+        
+        // from の指定から侵入方向を判定 ("right" 以外は isLeft = true)
+        enemy.isLeft = String(data.from || 'left').toLowerCase() !== 'right';
+
+        return enemy;
     }
 }
 
@@ -136,49 +110,37 @@ export class ScoutEnemy extends Enemy {
  * StationaryEnemy: 画面内の指定位置まで降りて静止し、弾を撒いて去っていく設置型
  */
 export class StationaryEnemy extends Enemy {
-    static DEFAULT_STOP_Y = 100;
-    static DEFAULT_WAIT_TIME = 120;
+    stopY = 100;
+    waitTime = 120;
+    stateTimer = 0;
+    state = 'MOVE_IN';
 
     get imageName() { return "enemy_stationary.webp"; }
 
-    constructor(game, x, y, bulletType, hp = 1, stopY = StationaryEnemy.DEFAULT_STOP_Y, waitTime = StationaryEnemy.DEFAULT_WAIT_TIME) {
-        super(game, x, y, bulletType, hp);
-        this.baseX = x; // 🎯 画面生成時点での初期X座標
-        this.stopY = stopY;
-        this.waitTime = waitTime;
-        this.stateTimer = 0;
-        this.state = 'MOVE_IN';
-        this.baseShootInterval = 30; // 設置型のデフォルト発射間隔
+    constructor(game, bulletType = 'aim', hp = 1) {
+        super(game, bulletType, hp);
+        this.baseShootInterval = 30;
     }
 
     update(game) {
         if (!this.active) return;
 
-        // 状態別移動ロジック
         switch (this.state) {
             case 'MOVE_IN':
                 this.y += 2;
-                // MOVE_IN から STOP に切り替わる瞬間に、補正済みの this.x を baseX として再記憶する
                 if (this.y >= this.stopY) {
                     this.state = 'STOP';
-                    this.baseX = this.x; // 👈 🎯 これを追加！spawnEnemyで補正された後の位置をベースにする
                 }
                 break;
 
             case 'STOP':
                 this.stateTimer++;
-                // baseX を基準に揺らす（これで補正位置からズレなくなる）
-                this.x = this.baseX + Math.sin(this.stateTimer * 0.2) * 2;
+                // 記憶された startX をベースに細かく横揺れ
+                this.x = this.startX + Math.sin(this.stateTimer * 0.2) * 2;
 
-                // 静止中のみ射撃タイマー更新
-                this.shootTimer++;
-                const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-                if (this.shootTimer >= currentInterval) {
-                    this.shoot(game);
-                    this.shootTimer = 0;
-                }
+                // 🎯 親クラスの自動射撃カウンター＆発射処理に一任！
+                super.update(game);
 
-                // 待機時間が終わったら撤退状態へ
                 if (this.stateTimer >= this.waitTime) {
                     this.state = 'MOVE_OUT';
                 }
@@ -190,15 +152,14 @@ export class StationaryEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new StationaryEnemy(
-            game, x, y, bType, 
-            data.hp ?? 1, 
-            data.stopY ?? StationaryEnemy.DEFAULT_STOP_Y, 
-            data.waitTime ?? StationaryEnemy.DEFAULT_WAIT_TIME
-        );
+    static create(game, bType, hp, data = {}) {
+        const enemy = new StationaryEnemy(game, bType, hp);
+        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        if (data.waitTime !== undefined) enemy.waitTime = data.waitTime;
+        return enemy;
     }
 }
+
 
 /**
  * AssaultEnemy: 直進後、自機の高度に合わせて急激に軌道修正して体当たりを狙う突撃型
@@ -206,14 +167,11 @@ export class StationaryEnemy extends Enemy {
 export class AssaultEnemy extends Enemy {
     static CHARGE_SPEED = 6.5;
 
-    get imageName() { return "enemy_assault.webp"; }
+    state = 'FALL';
+    vx = 0;
+    vy = 3.0;
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 1);
-        this.state = 'FALL';
-        this.vx = 0;
-        this.vy = 3.0;
-    }
+    get imageName() { return "enemy_assault.webp"; }
 
     update(game) {
         if (!this.active) return;
@@ -221,7 +179,6 @@ export class AssaultEnemy extends Enemy {
         this.x += this.vx;
         this.y += this.vy;
 
-        // 自機の位置に合わせて突撃開始
         if (this.state === 'FALL' && game?.player?.alive) {
             if (this.y >= game.player.y - 150) {
                 this.state = 'CHARGE';
@@ -231,14 +188,12 @@ export class AssaultEnemy extends Enemy {
                 
                 this.vx = (dx / dist) * AssaultEnemy.CHARGE_SPEED; 
                 this.vy = (dy / dist) * AssaultEnemy.CHARGE_SPEED;
-                
-                game.sc?.audio?.playHitSound?.(); 
             }
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new AssaultEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new AssaultEnemy(game, bType, hp);
     }
 }
 
@@ -247,12 +202,13 @@ export class AssaultEnemy extends Enemy {
  * HunterEnemy: 執拗に自機のX座標を追従しながら降下してくるハンター型
  */
 export class HunterEnemy extends Enemy {
+    speedY = 1.0;
+    speedX = 1.5;
+
     get imageName() { return "enemy_hunter.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2); 
-        this.speedY = 1.0; 
-        this.speedX = 1.5; 
+    constructor(game, bulletType = 'aim', hp = 2) {
+        super(game, bulletType, hp); 
         this.baseShootInterval = 80;
     }
 
@@ -261,7 +217,6 @@ export class HunterEnemy extends Enemy {
 
         this.y += this.speedY;
 
-        // X軸追従
         if (game?.player?.alive) {
             const targetX = game.player.x;
             if (this.x < targetX) {
@@ -271,20 +226,12 @@ export class HunterEnemy extends Enemy {
             }
         }
 
-        // 射撃処理
-        const isInFiringRange = this.y > 20 && this.y < 475;
-        if (isInFiringRange) {
-            this.shootTimer++;
-            const currentInterval = this.baseShootInterval / this.fireRateMultiplier;
-            if (this.shootTimer >= currentInterval) {
-                this.shoot(game);
-                this.shootTimer = 0;
-            }
-        }
+        // 親クラスの update で画面内判定＆射撃タイマー処理を行う
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new HunterEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new HunterEnemy(game, bType, hp);
     }
 }
 
@@ -293,11 +240,12 @@ export class HunterEnemy extends Enemy {
  * ShieldEnemy: 高耐久の盾。正面から弾を受けると「撃ち返し（カウンター）」を発生させる
  */
 export class ShieldEnemy extends Enemy {
+    speedY = 0.6;
+
     get imageName() { return "enemy_shield.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 5); 
-        this.speedY = 0.6; 
+    constructor(game, bulletType = 'aim', hp = 5) {
+        super(game, bulletType, hp);
     }
 
     update(game) {
@@ -305,42 +253,44 @@ export class ShieldEnemy extends Enemy {
         this.y += this.speedY;
     }
 
-    takeDamage(amount) {
-        const isDead = super.takeDamage(amount);
-        // ダメージを受けるたびにカウンター弾発射
-        if (!isDead && this.game) {
-            this.game.entities.push(
+    takeDamage(game, amount) {
+        const isDead = super.takeDamage(game, amount);
+        if (!isDead && game) {
+            game.entities.push(
                 new EnemyBullet(this.x + this.width / 2, this.y + this.height, 0, 3)
             );
         }
         return isDead;
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new ShieldEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new ShieldEnemy(game, bType, hp);
     }
 }
 
+
 /**
- * GaleArtillery: 画面上部に陣取り、強風（自機を横へ押し流す風圧効果）を発生させる固定砲台
+ * GaleArtilleryEnemy: 画面上部に陣取り、強風を発生させる固定砲台
  */
 export class GaleArtilleryEnemy extends Enemy {
+    stopY = 40;
+    timer = 0;
+    state = 'MOVE_IN';
+
     get imageName() { return "enemy_gale_artillery.webp"; }
 
-    constructor(game, x, y, bulletType, stopY = 80) {
-        super(game, x, y, bulletType, 4); // HP = 4
+    constructor(game, bulletType = 'triple', hp = 4) {
+        super(game, bulletType, hp);
         this.width = 160;
         this.height = (155 / 291) * 160;
-        this.stopY = stopY;
-        this.timer = 0;
-        this.state = 'MOVE_IN';
-        this.windDirection = Math.random() < 0.5 ? 1 : -1; // 左吹きか右吹きか
+        this.baseShootInterval = 45;
+        this.windDirection = Math.random() < 0.5 ? 1 : -1;
 
         this.windParticles = Array.from({ length: 15 }, () => ({
-            x: Math.random() * game.width,
-            y: Math.random() * game.height,
-            length: 20 + Math.random() * 40, // 線の長さ
-            speed: 6 + Math.random() * 6     // 風のスピード
+            x: Math.random() * (game?.width ?? 640),
+            y: Math.random() * (game?.height ?? 480),
+            length: 20 + Math.random() * 40,
+            speed: 6 + Math.random() * 6
         }));
     }
 
@@ -358,17 +308,13 @@ export class GaleArtilleryEnemy extends Enemy {
             case 'BLOW_GALE':
                 this.timer++;
 
-                // 🌪️ 風圧を自機へ「外部の力」として加える
                 if (game.player && game.player.alive) {
-                    // マウス操作でも流されるよう、風圧の強さを少し高め（例: 1.5〜2.0程度）に設定
                     const windPower = (Math.sin(this.timer * 0.08) * 0.8 + 1.2); 
                     game.player.windForceX = this.windDirection * windPower;
                 }
 
-                if (this.timer % Math.floor(45 / this.fireRateMultiplier) === 0) {
-                    this.bulletType = 'triple';
-                    this.shoot(game);
-                }
+                // 🎯 親クラスの自動射撃カウンター＆発射処理を実行
+                super.update(game);
 
                 if (this.timer >= 150) {
                     this.state = 'RETREAT';
@@ -381,27 +327,22 @@ export class GaleArtilleryEnemy extends Enemy {
         }
     }
 
-    draw(ctx) {
-        super.draw(ctx); // 本体描画
+    draw(ctx, isDebug = false) {
+        super.draw(ctx, isDebug);
 
-        // 🌪️ 風を吹かせている状態の時だけ風圧ラインを描画
         if (this.state === 'BLOW_GALE') {
             ctx.save();
-            ctx.strokeStyle = 'rgba(200, 255, 255, 0.4)'; // うっすら光る水色/白
+            ctx.strokeStyle = 'rgba(200, 255, 255, 0.4)';
             ctx.lineWidth = 1.5;
 
-            // 💡 ctx.canvas から画面幅を取得
             const gameWidth = ctx.canvas.width;
 
             for (const p of this.windParticles) {
-                // 風の向きに合わせてパーティクルを移動
                 p.x += this.windDirection * p.speed;
 
-                // 画面外に出たら反対側からリスポーン（game.width / this.gamewidth を置き換え）
                 if (this.windDirection > 0 && p.x > gameWidth) p.x = -p.length;
                 if (this.windDirection < 0 && p.x < -p.length) p.x = gameWidth;
 
-                // 描画（風の流れを表す横線）
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
                 ctx.lineTo(p.x + (this.windDirection * p.length), p.y);
@@ -410,13 +351,16 @@ export class GaleArtilleryEnemy extends Enemy {
             ctx.restore();
         }
     }   
-    static create(game, x, y, bType, data = {}) {
-        return new GaleArtilleryEnemy(game, x, y, bType, data.stopY || 80);
+
+    static create(game, bType, hp, data = {}) {
+        const enemy = new GaleArtilleryEnemy(game, bType, hp);
+        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        return enemy;
     }
 }
 
 // ==========================================
-// 3. ENEMY_REGISTRY への動的自動登録
+// 2. ENEMY_REGISTRY への動的自動登録
 // ==========================================
 ENEMY_REGISTRY.set('straight', StraightEnemy);
 ENEMY_REGISTRY.set('sine', SineEnemy);

@@ -7,7 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+"use strict";
+
+import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-7 固有のザコ・中型敵クラス群
@@ -17,14 +19,15 @@ import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  * 1. CircuitWalker: 背景の電子グリッドに沿うようにカクカクと90度直角に曲がりながら迫る電子プログラム機
  */
 export class CircuitWalkerEnemy extends Enemy {
+    vx = 0;
+    vy = 2.0;
+    timer = 0;
+    turnInterval = 60; // 60Fごとに直角ターン
+
     get imageName() { return "enemy_circuit_walker.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2); // HP = 2
-        this.vx = 0;
-        this.vy = 2.0;
-        this.timer = 0;
-        this.turnInterval = 60; // 60Fごとに直角ターン
+    constructor(game, bulletType = 'none', hp = 2) {
+        super(game, bulletType, hp);
     }
 
     update(game) {
@@ -38,7 +41,7 @@ export class CircuitWalkerEnemy extends Enemy {
         if (this.timer % this.turnInterval === 0) {
             if (this.vy !== 0) {
                 this.vy = 0;
-                this.vx = (this.x < game.width / 2) ? 2.5 : -2.5; // 画面中央方向へ曲がる
+                this.vx = (this.x < (game?.width || 800) / 2) ? 2.5 : -2.5; // 画面中央方向へ曲がる
             } else {
                 this.vx = 0;
                 this.vy = 2.5; // 再び下降
@@ -47,8 +50,8 @@ export class CircuitWalkerEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new CircuitWalkerEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new CircuitWalkerEnemy(game, bType, hp || 2);
     }
 }
 
@@ -56,15 +59,17 @@ export class CircuitWalkerEnemy extends Enemy {
  * 2. VoidBit: 自機の周囲を円軌道で周回しながら中心に向けて高密度射撃を行う電子ビット機
  */
 export class VoidBitEnemy extends Enemy {
+    angle = Math.random() * Math.PI * 2;
+    radius = 120; // 自機からの周回半径
+    timer = 0;
+
     get imageName() { return "enemy_void_bit.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 1); // HP = 1
+    constructor(game, bulletType = 'aim', hp = 1) {
+        super(game, bulletType, hp);
         this.width = 24;
         this.height = 24;
-        this.angle = Math.random() * Math.PI * 2;
-        this.radius = 120; // 自機からの周回半径
-        this.timer = 0;
+        this.baseShootInterval = 50;
     }
 
     update(game) {
@@ -73,7 +78,7 @@ export class VoidBitEnemy extends Enemy {
         this.angle += 0.04; // 円周運動
 
         // 自機が存在すれば、自機を中心に円運動を行う
-        if (game.player && game.player.alive) {
+        if (game?.player?.alive) {
             const px = game.player.x + game.player.width / 2;
             const py = game.player.y + game.player.height / 2;
             this.x = px + Math.cos(this.angle) * this.radius - this.width / 2;
@@ -82,12 +87,7 @@ export class VoidBitEnemy extends Enemy {
             this.y += 2.0;
         }
 
-        // 50F（約0.8秒）周期で自機狙い弾
-        const interval = Math.max(1, Math.floor(50 / this.fireRateMultiplier));
-        if (this.timer % interval === 0) {
-            this.bulletType = 'aim';
-            this.shoot(game);
-        }
+        super.update(game);
 
         // 4秒経過（240F）で消滅
         if (this.timer >= 240) {
@@ -95,8 +95,8 @@ export class VoidBitEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new VoidBitEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new VoidBitEnemy(game, bType, hp);
     }
 }
 
@@ -104,39 +104,33 @@ export class VoidBitEnemy extends Enemy {
  * 3. GateKeeper: 画面中央を左右に陣取り、格子状（レーザー）の弾幕の壁を作る中型要塞防衛機
  */
 export class GateKeeperEnemy extends Enemy {
+    speedX = 1.5;
+
     get imageName() { return "enemy_gate_keeper.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 8); // HP = 8
-        this.width = (528/312)*48;
+    constructor(game, bulletType = 'eight-way', hp = 8) {
+        super(game, bulletType, hp);
+        this.width = (528 / 312) * 48;
         this.height = 48;
-        this.speedX = 1.5;
-        this.timer = 0;
+        this.baseShootInterval = 30;
     }
 
     update(game) {
         if (!this.active) return;
-        this.timer++;
 
         this.y += 0.3; // 非常にゆっくり下降
         this.x += this.speedX;
 
-        if (this.x < 30 || this.x > game.width - 30 - this.width) {
+        const screenWidth = game?.width || 800;
+        if (this.x < 30 || this.x > screenWidth - 30 - this.width) {
             this.speedX = -this.speedX; // 画面端で反転
         }
 
-        // 30F周期で全方位8方向弾幕を連続掃射
-        const interval = Math.max(1, Math.floor(30 / this.fireRateMultiplier));
-        if (this.timer % interval === 0) {
-            this.bulletType = 'eight-way';
-            this.shoot(game);
-        }
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new GateKeeperEnemy(game, x, y, bType);
-        if (data.hp) enemy.hp = data.hp;
-        return enemy;
+    static create(game, bType, hp, data = {}) {
+        return new GateKeeperEnemy(game, bType || 'eight-way', hp || 8);
     }
 }
 
@@ -150,27 +144,29 @@ export class GateKeeperEnemy extends Enemy {
  * 特徴: HP50%以下で変形演出に入り【第2形態（Overlord）】へと覚醒・変身するラストボス
  */
 export class BossEnemy_07 extends BossEnemy {
+    state = 'APPEAR';
+    timer = 0;
+    formPhase = 1; // 1: 第一形態, 2: 最終形態
+    isInvincible = false;
+
     // 形態に応じて自動的に画像パスを切り替え
     get imageName() { 
         return this.formPhase === 2 ? "enemy_boss_07_phase2.webp" : "enemy_boss_07_phase1.webp"; 
     }
 
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        super(game, x, -160, hp, timeLimit, timeMultiplier);
+    constructor(game, hp = 150, timeLimit, timeMultiplier) {
+        super(game, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
-        this.maxHp = hp; // HP最大値を明示的に設定（第2形態移行判定用）
-        this.width = (747/312)*120;
+        this.width = (747 / 312) * 120;
         this.height = 120;
         this.hitWidth = 270;
         this.hitHeight = 100;
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x - (this.width / 2); // 機体中央を合わせる
-        this.x = this.baseX;
-        this.formPhase = 1; // 1: 第一形態, 2: 最終形態
-        this.isInvincible = false;
     }
+
+     setStartPosition(x, y) {
+        super.setStartPosition(x, y);
+        this.baseX = x;
+    }    
 
     update(game) {
         if (!this.active) return;
@@ -186,15 +182,16 @@ export class BossEnemy_07 extends BossEnemy {
                 break;
 
             case 'CORE_PHASE_1':
-                this.x = this.baseX + Math.sin(this.timer * 0.01) * 35;
+                const bx1 = this.baseX ?? this.startX;
+                this.x = bx1 + Math.sin(this.timer * 0.01) * 35;
 
-                const intEight = Math.max(1, Math.floor(40 / this.fireRateMultiplier));
+                const intEight = Math.max(1, Math.floor(40 / (this.fireRateMultiplier || 1)));
                 if (this.timer % intEight === 0) {
                     this.bulletType = 'eight-way';
                     this.shoot(game);
                 }
 
-                const intAim = Math.max(1, Math.floor(25 / this.fireRateMultiplier));
+                const intAim = Math.max(1, Math.floor(25 / (this.fireRateMultiplier || 1)));
                 if (this.timer % intAim === 0) {
                     this.bulletType = 'aim';
                     this.shoot(game);
@@ -211,11 +208,12 @@ export class BossEnemy_07 extends BossEnemy {
             case 'TRANSFORM':
                 // 変形中の2秒間（120F）は無敵状態
                 this.isInvincible = true;
-                this.x = this.baseX + Math.sin(this.timer * 0.6) * 6; // 超高速振動
+                const bx2 = this.baseX ?? this.startX;
+                this.x = bx2 + Math.sin(this.timer * 0.6) * 6; // 超高速振動
 
                 // 💡 最初の1フレーム目で第2形態画像をバックグラウンドロード開始
-                if (this.timer === 1 && this.game && this.game.assets) {
-                    this.game.assets.get("enemy_boss_07_phase2.webp");
+                if (this.timer === 1 && game?.assets) {
+                    game.assets.get("enemy_boss_07_phase2.webp");
                 }
 
                 if (this.timer > 120) {
@@ -227,7 +225,8 @@ export class BossEnemy_07 extends BossEnemy {
 
             case 'FINAL_OVERLORD':
                 // 最終暴走状態の移動と攻撃
-                this.x = this.baseX + Math.sin(this.timer * 0.04) * 80;
+                const bx3 = this.baseX ?? this.startX;
+                this.x = bx3 + Math.sin(this.timer * 0.04) * 80;
                 this.y = 35 + Math.cos(this.timer * 0.03) * 15;
 
                 if (this.timer % 15 === 0) {
@@ -243,18 +242,13 @@ export class BossEnemy_07 extends BossEnemy {
     }
 
     /** 変形演出中（isInvincible = true）はすべての被ダメージを無効化 */
-    takeDamage(amount) {
+    takeDamage(game, amount) {
         if (this.isInvincible) return false;
-        return super.takeDamage(amount);
+        return super.takeDamage(game, amount);
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         ctx.save();
-
-        // 💡 描画直前に現在の formPhase（imageName）に応じた最新の画像を AssetManager から再取得して更新
-        if (this.game && this.game.assets) {
-            this.image = this.game.assets.get(this.imageName);
-        }
 
         if (this.state === 'TRANSFORM') {
             const flash = 2.0 + Math.sin(this.timer * 0.8) * 1.5;
@@ -263,16 +257,16 @@ export class BossEnemy_07 extends BossEnemy {
             ctx.filter = 'saturate(3) contrast(1.4) drop-shadow(0px 0px 18px #FF0055)';
         }
 
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data = {}) {
+    static create(game, bType, hp, data = {}) {
         return new BossEnemy_07(
-            game, x, y, 
-            data.hp || 150, 
-            data.timeLimit || 2400, 
-            data.timeMultiplier || 150
+            game, 
+            hp || 150, 
+            data.timeLimit, 
+            data.timeMultiplier
         );
     }
 }

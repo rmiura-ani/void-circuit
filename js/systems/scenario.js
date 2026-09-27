@@ -1,7 +1,7 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/scenario.js シナリオ管理
+ * systems/scenario.js シナリオ管理
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
@@ -9,17 +9,36 @@
  */
 
 import { createEnemyInstance } from '../entities/enemy.js'; 
+import { WarningEffect } from '../entities//effects.js';
 
 /**
  * ScenarioManager 敵キャラシナリオ管理
  */
 export class ScenarioManager {
     constructor() {
-        this.REQUIRED_VERSION = 0.3;
+        this.REQUIRED_VERSION = 0.4;
         this.reset();
     }
 
     get length() { return this._scenario.length; }
+    
+    /** リセット */
+    reset() {
+        this._scenario = [];
+        this.stageName = "";
+        this.bgm = "";
+        this.kv = "";
+
+        this.currentIndex = 0;
+        this.currentScenarioFrame = 0;
+        this.isFinished = false;
+        
+        this.fireRateMultiplier = 1.0;
+        
+        this.version = "0.0";
+
+        this.lastError = null;
+    }
 
     /** YAMLシナリオファイルをロード */
     async loadScenario(path) {
@@ -48,9 +67,13 @@ export class ScenarioManager {
             this.preloadAssets = data.preloadAssets || [];
 
             // 敵データの抽出とソート
-            this._scenario =  data.scenario.sort((a, b) => a.frame - b.frame);
+            const rawScenario = Array.isArray(data.scenario) ? data.scenario : [];
+            const sortedScenario = rawScenario.sort((a, b) => a.frame - b.frame);
             
-            console.log(`[System] YAML Scenario "${path}" loaded. (${this._scenario.length} events)`);
+            // 🛡️ 事前バリデーション＆データ正規化の実行
+            this._scenario = this._validateScenarioData(sortedScenario);
+
+            console.log(`[System] YAML Scenario "${path}" loaded. (${this._scenario.length} events validated)`);
             return true;
         } catch (e) {
             console.error("[System] Scenario Load Failed:", e);
@@ -58,26 +81,105 @@ export class ScenarioManager {
         }
     }
 
+    /** 
+     * 🛡️ ロード時の事前バリデーション・データ正規化処理 
+     * 全イベントを走査し、不正パラメータの検知・警告・自動補正を行います。
+     */
+    _validateScenarioData(scenarioArray) {
+        const validatedList = [];
+        const validFroms = ['top', 'bottom', 'left', 'right'];
+
+        for (let i = 0; i < scenarioArray.length; i++) {
+            const data = scenarioArray[i];
+
+            if (!data || typeof data !== 'object') {
+                console.warn(`[Scenario Validation] Index ${i}: 無効なデータオブジェクトをスキップします。`, data);
+                continue;
+            }
+
+            // 特殊コマンド (LOOP_END等) はチェックをパスしてそのまま追加
+            if (data.type === 'LOOP_END' || data.type === 'BOSS_TRIGGER') {
+                validatedList.push(data);
+                continue;
+            }
+
+            // 1. type チェック
+            if (!data.type) {
+                console.error(`[Scenario Validation Error] Index ${i}: enemy type が指定されていません。スキップします。`, data);
+                continue;
+            }
+
+            // 2. from / dir の許容値チェックと正規化
+            const rawFrom = data.from || data.dir;
+            let from = 'top';
+
+            if (rawFrom) {
+                const lowerFrom = String(rawFrom).toLowerCase();
+                if (validFroms.includes(lowerFrom)) {
+                    from = lowerFrom;
+                } else {
+                    console.warn(`[Scenario Validation Warning] Index ${i}: 不正な from/dir 指定 "${rawFrom}". デフォルト "top" を割り当てます。`, data);
+                }
+            }
+            data.from = from;
+
+            // 3. 数値型パラメータの事前修正
+            if (data.x !== undefined && (typeof data.x !== 'number' || Number.isNaN(data.x))) {
+                console.warn(`[Scenario Validation Warning] Index ${i}: x 座標が不正な数値です (${data.x})。自動処理対象にします。`, data);
+                delete data.x;
+            }
+            if (data.y !== undefined && (typeof data.y !== 'number' || Number.isNaN(data.y))) {
+                console.warn(`[Scenario Validation Warning] Index ${i}: y 座標が不正な数値です (${data.y})。自動処理対象にします。`, data);
+                delete data.y;
+            }
+
+            // 4. 矛盾パラメータの警告
+            if ((from === 'top' || from === 'bottom') && data.y !== undefined) {
+                console.warn(`[Scenario Validation Warning] Index ${i}: from "${from}" ですが y 座標 (${data.y}) が指定されています。from 優先で処理されます。`, data);
+            }
+            if ((from === 'left' || from === 'right') && data.x !== undefined) {
+                console.warn(`[Scenario Validation Warning] Index ${i}: from "${from}" ですが x 座標 (${data.x}) が指定されています。from 優先で処理されます。`, data);
+            }
+
+            // 5. HP & 弾丸タイプの補正
+            data.hp = (typeof data.hp === 'number' && data.hp > 0) ? data.hp : 1;
+            data.bulletType = data.bulletType;
+
+            // 6. ボスパラメータの事前補正
+            if (data.type.includes('boss')) {
+                const minTime = (data.hp / 2) * 8;
+                if (!data.timeLimit || isNaN(data.timeLimit)) {
+                    data.timeLimit = Math.floor(minTime * 4) || 3600;
+                }
+                if (!data.timeMultiplier) {
+                    data.timeMultiplier = Math.floor(data.hp * 3.33);
+                }
+            }
+
+            validatedList.push(data);
+        }
+
+        return validatedList;
+    }
+
     async loadStageResources(stageNum, assetManager, audioManager, assetBase) {
         const stagePath = `stage-${stageNum}`;
         const fileName = `${stagePath}/scenario.yaml`;
         const scenarioPath = `${assetBase}${fileName}`;
         
-        // ✨ 新しいロードが始まるので、前回の残ったエラーをクリアする
         this.lastError = null; 
 
         try {
-            // 1. シナリオYAML自体のロード
+            // 1. シナリオYAML自体のロード & 事前バリデーションの実行
             const loadSuccess = await this.loadScenario(scenarioPath);
-            // 💡 どこで落ちたか分かりやすくするため、エラーメッセージを具体的に記載
             if (!loadSuccess) throw new Error(`Failed to load scenario file: "${fileName}"`);
 
             // 2. scenario配下から出現する敵の種類を自動スキャン
             const enemyData = this._scenario; 
-            const enemyTypes = enemyData.map(e => e.type).filter(Boolean);
+            const enemyTypes = enemyData.map(e => e.type).filter(type => type && type !== 'LOOP_END' && type !== 'BOSS_TRIGGER');
             const uniqueTypes = [...new Set(enemyTypes)];
 
-            // 敵の基本画像を配列化 (boss_01 -> enemy_boss_01.webp)
+            // 敵の基本画像を配列化
             const imagesToPreload = uniqueTypes.map(type => `enemy_${type}.webp`);
 
             // 3. YAML直書きの固有追加アセットをマージ
@@ -88,32 +190,29 @@ export class ScenarioManager {
             // 4. キービジュアル画像の追加
             if (this.kv) {
                 const kvPath = typeof this.kv === 'object' ? this.kv.path : this.kv;
-                if (kvPath) {
-                    imagesToPreload.push(kvPath);
-                }
+                if (kvPath) imagesToPreload.push(kvPath);
             }
 
-            // 5. AssetManager を使って一括プリロードを実行
+            // 5. AssetManager 一括プリロード
             const finalImages = [...new Set(imagesToPreload)];
             if (finalImages.length > 0) {
                 try {
-                    await assetManager.preload(finalImages,stagePath); 
+                    await assetManager.preload(finalImages, stagePath); 
                 } catch (assetError) {
-                    // 💡 画像ロード自体のエラーをラップして原因を絞り込む
                     throw new Error(`Image asset preload failed. (Check files: ${finalImages.slice(0, 3).join(', ')}...)`);
                 }
             }
 
-            // 6. 既存の AudioManager を使ってBGMをロード
+            // 6. BGMロード
             if (this.bgm) {
                 try {
-                    await audioManager.loadStageBGM(this.bgm,stagePath);
+                    await audioManager.loadStageBGM(this.bgm, stagePath);
                 } catch (audioError) {
                     throw new Error(`BGM load failed: "${this.bgm}"`);
                 }
             }            
 
-            // 7. 既存の AudioManager を使ってシステムSEを一括プリロード
+            // 7. システムSEプリロード
             if (audioManager && typeof audioManager.preloadSE === 'function') {
                 try {
                     await audioManager.preloadSE();
@@ -125,15 +224,12 @@ export class ScenarioManager {
             return true;
         } catch (error) {
             console.error(`[ScenarioManager] Failed to load resources for stage ${stageNum}:`, error);
-            
-            // ✨ ここで catch した error のメッセージをインスタンスに保存します！
             this.lastError = error.message; 
-            
             return false;
         }
     }
 
-    /** サウンドテスト用：特定のステージのYAMLからBGM名とステージ名だけをピンポイントで取得する */
+    /** サウンドテスト用：メタデータ取得 */
     async peekStageMeta(stageNum, assetBase) {
         const fileName = `stage-${stageNum}/scenario.yaml`;
         const scenarioPath = `${assetBase}${fileName}`;
@@ -158,35 +254,37 @@ export class ScenarioManager {
 
     /** 難易度設定の適用 */
     setDifficulty(params) {
-        this.speedMultiplier = params.enemySpeed || 1.0;
         this.fireRateMultiplier = params.fireRate || 1.0;
+        this.bulletSpeedMultiplier = params.bulletSpeed || 1.0; // 弾速の倍率
+        this.wayBonus = params.wayBonus || 0;                    // WAY数の加算値（例: EASY:-1, NORMAL:0, HARD:+1）
     }
 
     /** 更新 */
-    update(gameFrame, game) {
+    update(game) {
         if (this.isFinished || this._scenario.length === 0) return;
 
-        // シナリオ内フレームを進める
         this.currentScenarioFrame++;
 
-        // 現在のインデックスから、指定フレームに到達したイベントを処理
         while (
             this.currentIndex < this._scenario.length && 
             this._scenario[this.currentIndex].frame <= this.currentScenarioFrame
         ) {
             const data = this._scenario[this.currentIndex];
+            console.log(data);
 
-            // 特殊イベント「LOOP_END」の判定
             if (data.type === 'LOOP_END') {
-                // ループ実行：フレームとインデックスを戻す
                 this.currentScenarioFrame = data.returnTo || 0;
                 this.currentIndex = this._findStartIndexForFrame(this.currentScenarioFrame);
                 console.log(`[System] Scenario looping back to frame: ${this.currentScenarioFrame}`);
-                continue; // 巻き戻した後の最初の敵を即座に判定するためにループ継続
+                continue;
             }
 
-            // 通常の敵生成
-            this.spawnEnemy(data, game);
+            if (data.type === 'BOSS_TRIGGER') {
+                const warning = new WarningEffect(game);
+                game.entities.push(warning);
+            }else{
+                this.spawnEnemy(game, data);
+            }
             this.currentIndex++;
         }
 
@@ -195,7 +293,6 @@ export class ScenarioManager {
         }
     }
 
-    /** 指定フレームまで巻き戻した際の、最適な currentIndex を探す */
     _findStartIndexForFrame(targetFrame) {
         let index = 0;
         while (index < this._scenario.length && this._scenario[index].frame < targetFrame) {
@@ -204,7 +301,6 @@ export class ScenarioManager {
         return index;
     }
 
-    /** 現在のインデックスから先に向かって、最初の LOOP_END を探す */
     skipToAfterLoop() {
         for (let i = this.currentIndex; i < this._scenario.length; i++) {
             if (this._scenario[i].type === 'LOOP_END') {
@@ -215,97 +311,55 @@ export class ScenarioManager {
         }
     }
 
-    /** リセット */
-    reset() {
-        this._scenario = [];
-        this.stageName = "";
-        this.bgm = "";
-        this.kv = "";
+/** 敵インスタンスの動的生成（軽量化済み） */
+    spawnEnemy(game, data) {
+        if (!data || data.spawned) return;
 
-        this.currentIndex = 0;
-        this.currentScenarioFrame = 0;
-        this.isFinished = false;
-        
-        this.speedMultiplier = 1.0;
-        this.fireRateMultiplier = 1.0;
-        
-        this.version = "0.0"    
+        const enemy = createEnemyInstance(game, data.type, data.bulletType, data.hp, data);
 
-        this.lastError = null;
-    }
-
-     /** 敵インスタンスの動的生成 */
-    spawnEnemy(data, game) {
-        const bType = data.bulletType || 'aim';
-        const hp = data.hp || 1;
-
-        // 1. x, y は補完せず、渡されたそのままの値（指定なしなら undefined）を一旦保持
-        const rawX = data.x;
-        const rawY = data.y;
-
-        // 暫定座標（仮でランダム/デフォルト値をセットしておき、後で width を使って補正する）
-        let x = rawX ?? Math.random() * game.width;
-        let y = rawY ?? -32; // 基本は画面外上部
-        
-        // ボス専用パラメータの自動逆算ロジック
-        if (data.type && data.type.includes('boss')) {
-            const minTime = (hp / 2) * 8; 
-            if (!data.timeLimit) {
-                data.timeLimit = Math.floor(minTime * 4);
-            }
-            if (!data.timeLimit || isNaN(data.timeLimit)) {
-                data.timeLimit = 3600;
-            }
-            if (!data.timeMultiplier) {
-                data.timeMultiplier = Math.floor(hp * 3.33);
-            }
+        if (!enemy) {
+            console.error(`[SpawnEnemy Error] タイプ "${data.type}" のエネミー生成に失敗しました。`, data);
+            return;
         }
 
-        // 重複生成防止
-        if (data.spawned) return;
+        // 🎯 座標決定ロジック (事前バリデーション済みの from を使用)
+        let posX, posY;
 
-        // 2. インスタンス生成（この時点で enemy.width, enemy.height が確定する）
-        const enemy = createEnemyInstance(data.type, game, x, y, bType, data);
-
-        // 3. 🎯 座標補正処理
-        if (enemy) {
-            // YAML等で x が明示的に指定されている場合：中心指定とみなして左上座標へシフト
-            if (rawX !== undefined && rawX !== null) {
-                enemy.x = rawX - enemy.width / 2;
-            }
-            // (※ wind_slicer のように x 未指定で独自の出現ロジックを持つ敵は、何もしないことで WindSlicer 側の初期化処理に任せる)
-
-            // y も明示的に指定されている場合は中心合わせ（必要に応じて）
-            if (rawY !== undefined && rawY !== null) {
-                enemy.y = rawY - enemy.height / 2;
-            }
+        if (data.from === 'left') {
+            posX = -enemy.width;
+        } else if (data.from === 'right') {
+            posX = game.width;
+        } else if (data.x !== undefined && data.x !== null) {
+            posX = data.x - enemy.width / 2;
+        } else {
+            posX = Math.random() * (game.width - enemy.width);
         }
 
-        // 🚨 ボス系エンティティが生成された場合の共通演出トリガー
-        if (data.type && data.type.includes('boss')) {
-            game.startBossBattle(); // スクロール停止、警告演出、タイムボーナスカウント開始
-            data.spawned = true;    // 無限ループ時でもボス自体が何匹も湧かないようにガード
+        if (data.from === 'bottom') {
+            posY = game.height;
+        } else if (data.from === 'top') {
+            posY = -enemy.height;
+        } else if (data.y !== undefined && data.y !== null) {
+            posY = data.y - enemy.height / 2;
+        } else {
+            posY = (game.height - enemy.height) / 2;
         }
 
-        // 難易度と個別パラメータの適用
-        this._applyDifficultyParams(enemy, data);
+        // 🎯 決定した座標をセット＆初期位置（startX, startY）として記憶
+        enemy.setStartPosition(posX, posY);
 
+        // 🚨 ボスパラメータ処理
+        if (data.type.includes('boss')) {
+            game.startBossBattle?.();
+            data.spawned = true;
+        }
+
+        enemy.fireRateMultiplier = this.fireRateMultiplier;
+        enemy.bulletSpeedMultiplier = this.bulletSpeedMultiplier;
+        enemy.wayBonus = this.wayBonus;
+
+        
         game.stats.enemiesSpawned++;
         game.entities.push(enemy);
-    }
-
-    _applyDifficultyParams(enemy, data) {
-        // HPの上書き
-        if (data.hp !== undefined) {
-            enemy.hp = data.hp;
-            enemy.maxHp = data.hp;
-        }
-
-        // 移動速度：(データ指定速度 or クラス既定速度) × 難易度倍率
-        const baseSpeed = data.speed ?? enemy.speed; 
-        enemy.speed = baseSpeed * this.speedMultiplier;
-
-        // 射撃レート
-        enemy.fireRateMultiplier = this.fireRateMultiplier;
     }
 }

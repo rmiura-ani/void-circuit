@@ -30,10 +30,26 @@ const GAME_CONFIG = {
     PLAYER_SPAWN_INVINCIBLE_TIME: 180,
     FPS: 60,
     DIFFICULTY_PARAMS: {
-        'EASY': { enemySpeed: 0.7, fireRate: 0.5 },
-        'NORMAL': { enemySpeed: 1.0, fireRate: 1.0 },
-        'HARD': { enemySpeed: 1.1, fireRate: 1.5 },
-        'VERY HARD': { enemySpeed: 1.3, fireRate: 2.0 }
+        'EASY': { 
+            fireRate: 0.7, 
+            bulletSpeed: 0.75, 
+            wayBonus: -1 // 例: 3WAY -> 2WAY（弾幕の隙間が広がり避けやすい）
+        },
+        'NORMAL': { 
+            fireRate: 1.0, 
+            bulletSpeed: 0.9,  
+            wayBonus: 0  // 基本の弾幕パターン通り
+        },
+        'HARD': { 
+            fireRate: 1.3, 
+            bulletSpeed: 1.0,  
+            wayBonus: 1  // 例: 3WAY -> 4WAY（弾幕密度アップ）
+        },
+        'VERY HARD': { 
+            fireRate: 1.6, 
+            bulletSpeed: 1.1,  
+            wayBonus: 2  // 例: 3WAY -> 5WAY（超高密度・高スピード）
+        }
     }
 };
 
@@ -150,10 +166,7 @@ export class Game {
     /** ゲーム開始 */
     async start(initialInputMode, startStage = 1) {
         this.ui.resetGameUIState();
-        
-        const diffParam = GAME_CONFIG.DIFFICULTY_PARAMS[this.sc.config.difficulty] || GAME_CONFIG.DIFFICULTY_PARAMS['NORMAL'];
-        this.scenario.setDifficulty(diffParam);
-        
+                
         this.reset();
         this._attachEventListeners();
         
@@ -179,9 +192,12 @@ export class Game {
         this.clearTimer = 0;
 
         try {
+
             const success = await this.scenario.loadStageResources(stageNum, this.assets, this.sc.audio, this.sc.assetBase);
             
             if (success) {
+                const diffParam = GAME_CONFIG.DIFFICULTY_PARAMS[this.sc.config.difficulty] || GAME_CONFIG.DIFFICULTY_PARAMS['NORMAL'];
+                this.scenario.setDifficulty(diffParam);
                 this.background.setup(this.scenario.bgColor, stageNum); 
                 this.sc.audio?.playBGM();
                 
@@ -210,7 +226,7 @@ export class Game {
 
         this.frame++;
         this.player.update(this.width, this.height);
-        this.scenario.update(this.frame, this);
+        this.scenario.update(this);
 
         if (this.player.alive) {
             this.collisions.check(); 
@@ -250,7 +266,7 @@ export class Game {
             e.update(this);
 
             if (e.active && typeof e.isOutOfBounds === 'function') {
-                if (e.isOutOfBounds()) {
+                if (e.isOutOfBounds(this)) {
                     e.active = false;
                 }
             }

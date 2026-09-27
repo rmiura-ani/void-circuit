@@ -81,7 +81,7 @@ export class GameCollisionManager {
                     const baseDamage = pBullet.damage || 1;
                     const finalDamage = baseDamage * hitResult.multiplier;
 
-                    if (enemy.takeDamage(finalDamage)) {
+                    if (enemy.takeDamage(this.game, finalDamage)) {
                         // 敵撃破処理
                         this.game.stats.enemiesKilled++;
                         this._calculateAttachScore(enemy);

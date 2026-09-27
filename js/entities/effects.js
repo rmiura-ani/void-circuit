@@ -166,29 +166,13 @@ export class ScoreText extends Entity {
  * 画面全体にWARNING警告演出を表示する演出専用エンティティ
  */
 export class WarningEffect extends Entity {
-    /**
-     * @param {Game} game 
-     * @param {number} x 
-     * @param {number} y 
-     * @param {Object} data - YAMLからのパラメータ
-     */
-    constructor(game, x, y, data = {}) {
-        // 1. 親クラス(Entity)のコンストラクタに合わせて引数を渡す
-        const width = game ? game.width : 0;
-        const height = game ? game.height : 0;
-        super(x, y, width, height);
+    constructor() {
+        super(0, 0, 0, 0);
 
-        // 2. 演出用パラメータの設定
-        this.duration = data.duration || 120; // デフォルト2秒 (120frame)
+        this.duration = 120;
         this.frame = 0;
-
-        // 3. Entityとしてのプロパティ設定
         this.active = true;
-        this.hp = Infinity; // 破壊不能
-
-        // 4. SE
-        game.sc.audio?.playSiren();
-
+        this.soundPlayed = false;
     }
 
     /**
@@ -200,9 +184,14 @@ export class WarningEffect extends Entity {
             super.update(game);
         }
 
+        // 初回フレームでサイレンSEを再生
+        if (!this.soundPlayed) {
+            game?.audio?.playSiren?.() || game?.sc?.audio?.playSiren?.();
+            this.soundPlayed = true;
+        }
+
         this.frame++;
 
-        // 指定時間を過ぎたら非アクティブ化（game.entities から自動削除される）
         if (this.frame >= this.duration) {
             this.active = false;
         }
@@ -215,8 +204,9 @@ export class WarningEffect extends Entity {
     draw(ctx) {
         if (!this.active) return;
 
-        const width = typeof GAME_CONFIG !== 'undefined' ? game.width : this.width;
-        const height = typeof GAME_CONFIG !== 'undefined' ? game.height : this.height;
+        // ctx.canvas または game オブジェクトから画面幅・高さを正確に取得
+        const width = ctx.canvas?.width || this.game?.width || 320;
+        const height = ctx.canvas?.height || this.game?.height || 240;
         const barHeight = 20; // 上下の警告バーの太さ
 
         ctx.save();
@@ -236,7 +226,6 @@ export class WarningEffect extends Entity {
 
             // 斜めの黒ストライプを描画
             ctx.fillStyle = "#000000";
-            ctx.stripeWidth = 15;
             const stripeWidth = 15;
             
             for (let x = -barHeight; x < width + barHeight; x += stripeWidth * 2) {
@@ -275,7 +264,7 @@ export class WarningEffect extends Entity {
             ctx.shadowColor = "#ff0000";
             ctx.shadowBlur = 10;
 
-            // 画面上部（Y = 45px 付近、UIやスコア表示と重ならない位置）
+            // 画面上部（Y = 45px 付近）
             ctx.fillText("WARNING", width / 2, 45);
         }
 

@@ -8,7 +8,6 @@
  * Note: Included assets are the property of their respective owners.
  */
 import { Entity } from './base.js';
-import { WarningEffect } from './effects.js';
 
 // ==========================================
 // 1. 全敵クラス動的自動登録レジストリ (ENEMY_REGISTRY)
@@ -25,25 +24,44 @@ export const ENEMY_REGISTRY = new Map();
 // ==========================================
 
 export class Enemy extends Entity {
-    constructor(game, x, y, bulletType, hp = 1) {
-        super(x, y, 32, 32);
-        this.game = game;
-        this.bulletType = bulletType || 'aim';
+    // x, y を引数から外し、一旦 0 で初期化する
+    constructor(game, bulletType, hp = 1) {
+        super(0, 0, 32, 32); // 親クラス(Entity)には仮の0を渡しておく
+
+        this.bulletType = bulletType;
         this.speed = 2;
         this.hp = hp;
         this.maxHp = hp;
-        this.isEnemy = true; // 敵判定用フラグ
+
+        // 🎯 初期位置記憶用プロパティ
+        this.startX = 0;
+        this.startY = 0;
+
+        // 画面内侵入フラグ（下・横からの出現に対応するための重要フラグ）
+        this.hasEnteredScreen = false;
 
         // 射撃共通タイマー
         this.shootTimer = Math.random() * 60;
         this.baseShootInterval = 120; 
         this.fireRateMultiplier = 1.0;
+        this.bulletSpeedMultiplier = 1.0;
+        this.wayBonus = 0;
         
         // アセット読み込み
         this._loadAsset(game);
     }
 
-    get imageName() { return "enemy_straight.webp"; }
+    /**
+     * 🎯 生成・配置システム（spawnEnemy等）から呼び出して初期座標を設定・記憶する関数
+     * @param {number} x 初期X座標
+     * @param {number} y 初期Y座標
+     */
+    setStartPosition(x, y) {
+        this.x = x;
+        this.y = y;
+        this.startX = x;
+        this.startY = y;
+    }
 
     /** アセット読み込みの共通化 */
     _loadAsset(game) {
@@ -59,50 +77,52 @@ export class Enemy extends Entity {
     }
 
     /**
-     * 共通の画面外判定（弾や通常エフェクト用）
+     * 画面外削除判定（上・下・左右の全出現方向に対応）
      * @param {number} margin 許容マージン
      */
-    isOutOfBounds(margin = 64) {
+    isOutOfBounds(game, margin = 64) {
         // NaN ガードは親クラスのものを利用
         if (Number.isNaN(this.x) || Number.isNaN(this.y)) return true;
 
-        const gameWidth = typeof GAME_CONFIG !== 'undefined' ? game.width : 800;
-        const gameHeight = typeof GAME_CONFIG !== 'undefined' ? game.height : 600;
-
-        // 1. 下方向に画面外へ抜けたら削除（シューティングの敵の基本）
-        if (this.y > gameHeight + margin) return true;
-
-        // 2. 画面上・左右へ逃げる敵のための判定（一度画面内に入ったかどうかで切り替えると安全）
+        // 1. 一度画面内に入った後の消滅判定（上・下・左・右の画面外へ出たら削除）
         if (this.hasEnteredScreen) {
-            // 一度画面内に入った後、画面外へ大きく離脱したら削除
             return (
-                this.x < -margin * 2 ||
-                this.x > gameWidth + margin * 2 ||
-                this.y < -margin * 2
-            );
-        } else {
-            // まだ画面に出ていない（画面外から登場中）：出現限界を超えたら削除
-            const ABSOLUTE_LIMIT = 2000;
-            return (
-                this.x < -ABSOLUTE_LIMIT || 
-                this.x > ABSOLUTE_LIMIT || 
-                this.y < -ABSOLUTE_LIMIT
+                this.x < -margin ||
+                this.x > game.width + margin ||
+                this.y < -margin ||
+                this.y > game.height + margin
             );
         }
+
+        // 2. まだ画面内に入っていない（画面外からの登場待ち状態）：極端な暴走ガード
+        const ABSOLUTE_LIMIT = 2000;
+        return (
+            this.x < -ABSOLUTE_LIMIT || 
+            this.x > ABSOLUTE_LIMIT || 
+            this.y < -ABSOLUTE_LIMIT ||
+            this.y > ABSOLUTE_LIMIT
+        );
     }
 
     /** 
      * 共通の更新処理（メインルーチン） 
-     * 基本敵の移動・画面外削除・射撃判定をすべて1つに統合。
-     * サブクラスで特有の移動や射撃パターンを持つ場合は update(game) 全体をオーバーライドします。
      */
     update(game) {
         if (!this.active) return;
 
-        // 1. 基本移動（直進下降）
-        this.y += this.speed;
+        // 【見直しポイント】画面内に入ったかどうかをチェックしてフラグを立てる
+        if (!this.hasEnteredScreen) {
+            if (
+                this.x + this.width > 0 &&
+                this.x < game.width &&
+                this.y + this.height > 0 &&
+                this.y < game.height
+            ) {
+                this.hasEnteredScreen = true;
+            }
+        }
 
-        // 2. 基本射撃判定（画面内かつ生存時のみ）
+        // 基本射撃判定（画面内かつ生存時のみ）
         const isInFiringRange = this.y > 20 && this.y < 475;
         if (isInFiringRange) {
             this.shootTimer++;
@@ -115,58 +135,200 @@ export class Enemy extends Entity {
     }
 
     shoot(game) {
-        if (!game?.player) return;
+        if (!game) return;
 
+        // 難易度パラメータの取得（デフォルト1.0 / 0）
+        const bSpeedMult = this.bulletSpeedMultiplier ?? 1.0;
+        const wayBonus = this.wayBonus ?? 0;
+
+        // 発射位置の基本値
         const bx = this.x + this.width / 2;
         const by = this.y + this.height / 2; 
-        const targetX = game.player.x + game.player.width / 2;
-        const targetY = game.player.y + game.player.height / 2;
-        const angle = Math.atan2(targetY - by, targetX - bx);
 
-        const spawn = (vx, vy) => game.entities.push(new EnemyBullet(bx, by, vx, vy));
+        // 自機への角度計算（自機がいない場合は真下 Math.PI / 2）
+        let angle = Math.PI / 2;
+        if (game.player) {
+            const targetX = game.player.x + game.player.width / 2;
+            const targetY = game.player.y + game.player.height / 2;
+            angle = Math.atan2(targetY - by, targetX - bx);
+        }
+
+        const spawn = (vx, vy, customX = bx, customY = by) => {
+            // 弾速倍率を乗算して登録
+            game.entities.push(new EnemyBullet(customX, customY, vx * bSpeedMult, vy * bSpeedMult));
+        };
 
         switch (this.bulletType) {
-            case 'eight-way':
-                for (let i = 0; i < 8; i++) {
-                    const a = (Math.PI * 2 / 8) * i;
-                    spawn(Math.cos(a) * 3, Math.sin(a) * 3);
-                }
+            case 'none':
                 break;
+
             case 'straight':
                 spawn(0, 4);
                 break;
-            case 'triple':
-                [-0.3, 0, 0.3].forEach(off => 
-                    spawn(Math.cos(angle + off) * 3, Math.sin(angle + off) * 3)
-                );
+
+            case 'twin': {
+                // 2連並列弾
+                const offsetX = 8;
+                const speedY = 6.0;
+                spawn(0, speedY, bx - offsetX, by);
+                spawn(0, speedY, bx + offsetX, by);
                 break;
+            }
+
+            case 'triple': {
+                // wayBonusを反映した扇状拡散弾（基本3WAY -> EASY:2WAY / HARD:4WAY / VERY HARD:5WAY）
+                const baseWays = 3;
+                const totalWays = Math.max(1, baseWays + wayBonus);
+                const spreadAngle = 0.6; // 拡散範囲（放射角）
+
+                if (totalWays === 1) {
+                    spawn(Math.cos(angle) * 3, Math.sin(angle) * 3);
+                } else {
+                    const startAngle = angle - spreadAngle / 2;
+                    const step = spreadAngle / (totalWays - 1);
+                    for (let i = 0; i < totalWays; i++) {
+                        const a = startAngle + step * i;
+                        spawn(Math.cos(a) * 3, Math.sin(a) * 3);
+                    }
+                }
+                break;
+            }
+
+            case 'parallel-3': {
+                // 正面真下に並列弾（wayBonusで左右に並列追加も可能）
+                const spd = (this.bulletSpeed || 4.0);
+                const spawnY = this.y + this.height; // 足元から発射
+                spawn(0, spd + 0.5, bx, spawnY);
+                spawn(0, spd, bx - 10, spawnY - 5);
+                spawn(0, spd, bx + 10, spawnY - 5);
+
+                // HARD以上（wayBonus > 0）なら外側に追加
+                if (wayBonus > 0) {
+                    spawn(0, spd - 0.5, bx - 20, spawnY - 10);
+                    spawn(0, spd - 0.5, bx + 20, spawnY - 10);
+                }
+                break;
+            }
+
+            case 'ring-6':
+                this.shootRing(game, 6 + wayBonus, 2.0);
+                break;
+
+            case 'eight-way':
+            case 'ring-8':
+                this.shootRing(game, 8 + wayBonus, 3.0);
+                break;
+
+            case 'ring-12':
+                this.shootRing(game, 12 + wayBonus, 3.0);
+                break;
+
+            case 'cross': {
+                // 回転角 (rotationAngle) を反映した4方向クロス弾
+                const angleOffset = this.rotationAngle || 0;
+                const speed = 3.0;
+                for (let i = 0; i < 4; i++) {
+                    const a = angleOffset + (Math.PI / 2) * i;
+                    spawn(Math.cos(a) * speed, Math.sin(a) * speed);
+                }
+                break;
+            }
+
+            case 'wave': {
+                // 波紋拡散弾（基本3WAY -> wayBonus反映）
+                const baseAngle = Math.PI / 2; // 真下方向
+                const timer = this.timer ?? this.frame ?? 0;
+                const waveOffset = Math.sin(timer * 0.2) * 0.15;
+                const totalWays = Math.max(1, 3 + wayBonus);
+                const spreadAngle = 0.8;
+
+                if (totalWays === 1) {
+                    const a = baseAngle + waveOffset;
+                    spawn(Math.cos(a) * 2.8, Math.sin(a) * 2.8);
+                } else {
+                    const start = baseAngle - spreadAngle / 2 + waveOffset;
+                    const step = spreadAngle / (totalWays - 1);
+                    for (let i = 0; i < totalWays; i++) {
+                        const a = start + step * i;
+                        spawn(Math.cos(a) * 2.8, Math.sin(a) * 2.8);
+                    }
+                }
+                break;
+            }
+
             case 'aim':
-            default:
                 spawn(Math.cos(angle) * 4, Math.sin(angle) * 4);
                 break;
+
+            default:
+                spawn(Math.cos(angle) * 4, Math.sin(angle) * 4);
+                console.log(`[System] Illigal bulletType frame: ${this.this.bulletType}`);
+                break;
+
+            }
+    }
+    
+    shootRing(game, count, speed) {
+        if (!game) return;
+
+        const countFinal = Math.max(3, count); // 最低3方向は確保
+        const bSpeedMult = game.bulletSpeedMultiplier ?? 1.0;
+        const finalSpeed = speed * bSpeedMult;
+
+        const bx = this.x + this.width / 2;
+        const by = this.y + this.height / 2;
+
+        for (let i = 0; i < countFinal; i++) {
+            const angle = (Math.PI * 2 / countFinal) * i;
+            const vx = Math.cos(angle) * finalSpeed;
+            const vy = Math.sin(angle) * finalSpeed;
+            game.entities.push(new EnemyBullet(bx, by, vx, vy));
         }
     }
 
     /**
-     * 被ダメージ処理（外部およびサブクラスから呼ばれる必須処理）
-     * @param {number} amount ダメージ量
-     * @returns {boolean} 撃破されたかどうか (true: 死亡, false: 生存)
+     * 被ダメージ処理
      */
-    takeDamage(amount) {
+    takeDamage(game, amount) {
+        if (!this.active) return false;
         this.hp -= amount;
+
         if (this.hp <= 0) {
             this.active = false;
+            
+            // 🎯 撃破時特有の弾発散ロジックを親クラスで一括制御
+            if (this.bulletType === 'ring' || this.bulletType === 'cluster') {
+                this.burstBullets(game, 6, 1.8);
+            }
+
+            this.onDie(game);
             return true;
         }
         return false;
     }
+
+    /**
+     * 撃破時や特定イベントで周囲に全方位・リング状に弾を撒き散らす汎用メソッド
+     */
+    burstBullets(game, count = 6, speed = 2.0) {
+        if (!game) return;
+        const bx = this.x + this.width / 2;
+        const by = this.y + this.height / 2;
+
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 / count) * i;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            game.entities.push(new EnemyBullet(bx, by, vx, vy));
+        }
+    }
     
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         ctx.save();
 
-        const isHeaderArea = typeof GAME_CONFIG !== 'undefined' ? game.uiHeaderHeight : 40;
-        const gameWidth = typeof GAME_CONFIG !== 'undefined' ? game.width : 320;
-        const gameHeight = typeof GAME_CONFIG !== 'undefined' ? game.height : 480;
+        const gameWidth = ctx.canvas.width;
+        const gameHeight = ctx.canvas.height;
+        const isHeaderArea = 32;
 
         if (
             this.y + this.height < isHeaderArea ||
@@ -177,7 +339,6 @@ export class Enemy extends Entity {
             ctx.globalAlpha = (Math.floor(Date.now() / 33) % 2 === 0) ? 0.15 : 0.60;
         }
 
-        // 💡 画像が存在し、読み込みが完了しており、かつ破損していない (naturalWidth > 0) ことを直接確認
         if (this.image && this.image.complete && this.image.naturalWidth > 0) {
             ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
         } else {
@@ -198,25 +359,21 @@ export class Enemy extends Entity {
             }
         }
 
-        // 🎯 デバッグ枠（ヒットボックス）の表示制御
-        if (this.game.isInvincibleCheat) {
+        // デバッグ枠（ヒットボックス）の表示制御
+        if (isDebug) {
             ctx.lineWidth = 1.5;
 
-            // 💡 1. ボスなどマルチヒットボックス(getHitboxes)を持っている場合
             if (typeof this.getHitboxes === 'function') {
                 const hitboxes = this.getHitboxes();
 
                 for (const box of hitboxes) {
-                    // 弱点（ダメージ倍率 > 1.0）は赤〜ピンク、通常部分は緑で色分け
                     const isWeakSpot = box.multiplier && box.multiplier > 1.0;
                     ctx.strokeStyle = isWeakSpot ? '#FF0055' : 'lime';
                     ctx.fillStyle = isWeakSpot ? 'rgba(255, 0, 85, 0.2)' : 'rgba(0, 255, 0, 0.1)';
 
-                    // 塗りつぶしと枠線を描画
                     ctx.fillRect(box.x, box.y, box.width, box.height);
                     ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-                    // 部位名・倍率のテキスト表示（※不要な場合は削除可）
                     if (box.part) {
                         ctx.fillStyle = ctx.strokeStyle;
                         ctx.font = 'bold 9px sans-serif';
@@ -224,7 +381,6 @@ export class Enemy extends Entity {
                     }
                 }
             } 
-            // 💡 2. 従来の単一ヒットボックス（雑魚敵など）
             else {
                 ctx.strokeStyle = 'lime';
                 const hw = this.hitWidth || this.width;
@@ -236,10 +392,9 @@ export class Enemy extends Entity {
                 );
             }
         }
-
         ctx.restore();
     }
-    
+
     onDie(game, soundoff = false) {
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
@@ -248,8 +403,8 @@ export class Enemy extends Entity {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new Enemy(game, x, y, bType, data.hp || 1);
+    static create(game, bType, hp, data = {}) {
+        return new Enemy(game, bType, hp);
     }
 }
 
@@ -258,34 +413,35 @@ export class Enemy extends Entity {
 // ==========================================
 
 export class BossEnemy extends Enemy {
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        const bulletType = "aim";
-        super(game, x, y, bulletType, hp);
-        this.timeLimit = timeLimit || 1800;
-        this.timeMultiplier = timeMultiplier || 100;
+    constructor(game, hp = 100, timeLimit = 1800, timeMultiplier = 100) {
+        super(game, 'none', hp);    // ボスの弾は、各クラスで実装。
+        this.timeLimit = timeLimit;
+        this.timeMultiplier = timeMultiplier;
         this.isBoss = true;
     }
     
     onDie(game, soundoff = false) {
         super.onDie(game, soundoff);
 
-        // 【修正3】ボス死亡時の連鎖爆発演出
+        const bx = this.x;
+        const by = this.y;
+        const bw = this.width;
+        const bh = this.height;
+
         const explosionCount = 8;
         const intervalMs = 150;
 
         for (let i = 0; i < explosionCount; i++) {
             setTimeout(() => {
-                // ゲームインスタンスや衝突判定クラスが生存しているかチェック
                 if (!game?.collisions) return;
 
-                // 連鎖爆発のSEは、最初・中間・最後など数回だけに抑えて音割れを防ぐ
                 const shouldPlaySound = !soundoff && (i === 0 || i === 3 || i === 7);
 
                 game.collisions.createExplosion(
-                    this.x + Math.random() * this.width, 
-                    this.y + Math.random() * this.height, 
+                    bx + Math.random() * bw, 
+                    by + Math.random() * bh, 
                     this,
-                    !shouldPlaySound // soundoff フラグを制御
+                    !shouldPlaySound
                 );
             }, i * intervalMs);
         }
@@ -299,23 +455,20 @@ export class BossEnemy extends Enemy {
 /**
  * レジストリを経由して動的に敵インスタンス（または演出）を生成する
  */
-export function createEnemyInstance(type, game, x, y, bType, data = {}) {
-    if (type === 'BOSS_TRIGGER') {
-        return new WarningEffect(game, x, y, data);
-    }
+export function createEnemyInstance(game, type, bType, hp, data = {}) {
     const EnemyClass = ENEMY_REGISTRY.get(type);
 
     if (EnemyClass) {
-        return EnemyClass.create(game, x, y, bType, data);
+        return EnemyClass.create(game, bType, hp, data);
     }
 
     console.warn(`[Enemy Registry Warning] Unknown enemy type: '${type}'. Falling back to default 'straight'.`);
     const FallbackClass = ENEMY_REGISTRY.get('straight');
     if (FallbackClass) {
-        return FallbackClass.create(game, x, y, bType, data);
+        return FallbackClass.create(game, bType, hp, data);
     }
 
-    return new Enemy(game, x, y, bType, data.hp || 1);
+    return new Enemy(game, bType, hp);
 }
 
 /**
@@ -323,10 +476,10 @@ export function createEnemyInstance(type, game, x, y, bType, data = {}) {
  */
 export class EnemyBullet extends Entity {
     constructor(x, y, vx, vy) {
-        super(x, y, 4, 4); // 判定は 4x4
+        super(x, y, 4, 4);
         this.vx = vx;
         this.vy = vy;
-        this.renderRadius = 3; // 見た目の半径は 3（直径6）
+        this.renderRadius = 3;
     }
 
     /** 敵弾の移動更新と画面外判定 */

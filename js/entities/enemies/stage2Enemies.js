@@ -19,16 +19,21 @@ import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  * 1. AquaJet: 画面上部から急降下し、滑らかなS字軌道（水流）を描いて離脱する高速機
  */
 export class AquaJetEnemy extends Enemy {
+    speed = 3.8;
+    timer = 0;
+    amplitude = 60; // S字の振り幅
+
     get imageName() { return "enemy_aqua_jet.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 1); // HP = 1
+    constructor(game, bulletType = 'aim', hp = 1) {
+        super(game, bulletType, hp);
         this.width = (541 / 1247) * 32;
         this.height = 40;
+    }
+
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
         this.baseX = x;
-        this.speed = 3.8;
-        this.timer = 0;
-        this.amplitude = 60; // S字の振り幅
     }
 
     update(game) {
@@ -37,7 +42,8 @@ export class AquaJetEnemy extends Enemy {
 
         this.y += this.speed;
         // 水流に乗るような滑らかなS字サイン波移動
-        this.x = this.baseX + Math.sin(this.timer * 0.08) * this.amplitude;
+        const bx = this.baseX ?? this.startX;
+        this.x = bx + Math.sin(this.timer * 0.08) * this.amplitude;
 
         // 一定ライン通過時に自機狙い弾をサッと1発残す
         if (this.timer === 30) {
@@ -49,10 +55,8 @@ export class AquaJetEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new AquaJetEnemy(game, x, y, bType);
-        if (data.hp) enemy.hp = data.hp;
-        return enemy;
+    static create(game, bType, hp, data = {}) {
+        return new AquaJetEnemy(game, bType , hp);
     }
 }
 
@@ -60,15 +64,17 @@ export class AquaJetEnemy extends Enemy {
  * 2. WaveSpreader: 画面中央に滞留し、水面の波紋（サイン波）のように広がる波状弾幕を放射する砲台機
  */
 export class WaveSpreaderEnemy extends Enemy {
+    stopY = 110;
+    timer = 0;
+    state = 'MOVE_IN'; // MOVE_IN, SPREAD_ATTACK, RETREAT
+
     get imageName() { return "enemy_wave_spreader.webp"; }
 
-    constructor(game, x, y, bulletType, stopY = 110) {
-        super(game, x, y, bulletType, 3); // HP = 3
+    constructor(game, bulletType = 'triple', hp = 3) {
+        super(game, bulletType, hp);
         this.width = (1408 / 768) * 32;
         this.height = 32;
-        this.stopY = stopY;
-        this.timer = 0;
-        this.state = 'MOVE_IN'; // MOVE_IN, SPREAD_ATTACK, RETREAT
+        this.baseShootInterval = 40;
     }
 
     update(game) {
@@ -88,7 +94,8 @@ export class WaveSpreaderEnemy extends Enemy {
                 this.x += Math.cos(this.timer * 0.1) * 0.8;
 
                 // 40F周期で波紋状の3方向弾を発射
-                if (this.timer % Math.floor(40 / this.fireRateMultiplier) === 0) {
+                const interval = Math.max(1, Math.floor(this.baseShootInterval / (this.fireRateMultiplier || 1)));
+                if (this.timer % interval === 0) {
                     this.shootWaveBullet(game);
                 }
 
@@ -120,8 +127,10 @@ export class WaveSpreaderEnemy extends Enemy {
         });
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new WaveSpreaderEnemy(game, x, y, bType, data.stopY || 110);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new WaveSpreaderEnemy(game, bType || 'triple', hp || 3);
+        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        return enemy;
     }
 }
 
@@ -129,12 +138,17 @@ export class WaveSpreaderEnemy extends Enemy {
  * 3. BubbleMine: ふわふわ降下する水泡トラップ。被弾・撃破時に「小さな泡（8方向拡散）」を発散する
  */
 export class BubbleMineEnemy extends Enemy {
+    speedY = 0.8; // 水中に漂うような非常にゆっくりとした降下
+    timer = Math.random() * 100;
+
     get imageName() { return "enemy_bubble_mine.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 1); // HP = 1
-        this.speedY = 0.8; // 水中に漂うような非常にゆっくりとした降下
-        this.timer = Math.random() * 100;
+    constructor(game, bulletType = 'none', hp = 1) {
+        super(game, bulletType, hp);
+    }
+
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
         this.baseX = x;
     }
 
@@ -144,7 +158,8 @@ export class BubbleMineEnemy extends Enemy {
 
         this.y += this.speedY;
         // 水泡特有のゆらゆら揺れる横揺れ
-        this.x = this.baseX + Math.sin(this.timer) * 15;
+        const bx = this.baseX ?? this.startX;
+        this.x = bx + Math.sin(this.timer) * 15;
 
         if (this.isOutOfBounds(50, true)) {
             this.active = false;
@@ -152,15 +167,15 @@ export class BubbleMineEnemy extends Enemy {
     }
 
     /** 破壊時に泡（弾）を周囲に飛び散らせる */
-    takeDamage(amount) {
-        const isDead = super.takeDamage(amount);
-        if (isDead && this.game) {
-            this.popBubbleCluster();
+    takeDamage(game, amount) {
+        const isDead = super.takeDamage(game, amount);
+        if (isDead && game) {
+            this.popBubbleCluster(game);
         }
         return isDead;
     }
 
-    popBubbleCluster() {
+    popBubbleCluster(game) {
         const bx = this.x + this.width / 2;
         const by = this.y + this.height / 2;
 
@@ -169,12 +184,12 @@ export class BubbleMineEnemy extends Enemy {
             const angle = (Math.PI * 2 / 6) * i;
             const vx = Math.cos(angle) * 1.8;
             const vy = Math.sin(angle) * 1.8;
-            this.game.entities.push(new EnemyBullet(bx, by, vx, vy));
+            game.entities.push(new EnemyBullet(bx, by, vx, vy));
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new BubbleMineEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new BubbleMineEnemy(game, bType, hp || 1);
     }
 }
 
@@ -182,20 +197,26 @@ export class BubbleMineEnemy extends Enemy {
  * 4. VortexDiver: 自機を目掛けて斜め急降下し、画面下部で旋回（Vortex）して上昇離脱する中型機
  */
 export class VortexDiverEnemy extends Enemy {
+    state = 'DIVE';
+    vx = 0;
+    vy = 4.0;
+    timer = 0;
+    swirlAngle = 0;
+    swirlCenterX = 0;
+    swirlCenterY = 0;
+    flipScaleY = 1.0; // アニメーション用のスケール変数 (1.0 = 通常, -1.0 = 完全反転)
+
     get imageName() { return "enemy_vortex_diver.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2);
-        this.state = 'DIVE';
-        this.vx = 0;
-        this.vy = 4.0;
-        this.timer = 0;
-        this.swirlAngle = 0;
+    constructor(game, bulletType = 'straight', hp = 2) {
+        super(game, bulletType, hp);
+        this.baseShootInterval = 20;
+    }
+
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
         this.swirlCenterX = x;
         this.swirlCenterY = y;
-        
-        // アニメーション用のスケール変数 (1.0 = 通常, -1.0 = 完全反転)
-        this.flipScaleY = 1.0; 
     }
 
     update(game) {
@@ -206,7 +227,7 @@ export class VortexDiverEnemy extends Enemy {
                 this.x += this.vx;
                 this.y += this.vy;
 
-                if (game.player && this.y >= game.player.y - 100) {
+                if (game?.player && this.y >= game.player.y - 100) {
                     this.state = 'SWIRL';
                     this.swirlCenterX = this.x;
                     this.swirlCenterY = this.y;
@@ -243,7 +264,7 @@ export class VortexDiverEnemy extends Enemy {
         }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx, isDebug = false) {
         if (!this.active) return;
 
         ctx.save();
@@ -256,13 +277,13 @@ export class VortexDiverEnemy extends Enemy {
         ctx.translate(-this.x, -this.y);
 
         // 3. 親クラスの描画処理をそのまま実行
-        super.draw(ctx, isInvincibleCheat);
+        super.draw(ctx, isDebug);
 
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new VortexDiverEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new VortexDiverEnemy(game, bType || 'straight', hp || 2);
     }
 }
 
@@ -270,14 +291,16 @@ export class VortexDiverEnemy extends Enemy {
  * 5. CoralShield: サンゴの堅牢な外殻を持つ高耐久機。真下へ太い自機狙い連続弾を射出しながらゆっくり降下
  */
 export class CoralShieldEnemy extends Enemy {
+    speed = 0.5; // 超鈍重
+    timer = 0;
+
     get imageName() { return "enemy_coral_shield.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 6); // 高耐久 HP = 6
+    constructor(game, bulletType = 'straight', hp = 6) {
+        super(game, bulletType, hp);
         this.width = 48;
         this.height = (1408 / 768) * 48;
-        this.speed = 0.5; // 超鈍重
-        this.timer = 0;
+        this.baseShootInterval = 60;
     }
 
     update(game) {
@@ -287,7 +310,8 @@ export class CoralShieldEnemy extends Enemy {
         this.y += this.speed;
 
         // 60F（約1秒）ごとに正面真下へ強力な連続直線弾
-        if (this.timer % Math.floor(60 / this.fireRateMultiplier) === 0) {
+        const interval = Math.max(1, Math.floor(this.baseShootInterval / (this.fireRateMultiplier || 1)));
+        if (this.timer % interval === 0) {
             const bx = this.x + this.width / 2;
             const by = this.y + this.height;
             game.entities.push(new EnemyBullet(bx, by, 0, 4.5));
@@ -300,27 +324,22 @@ export class CoralShieldEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new CoralShieldEnemy(game, x, y, bType);
-        if (data.hp) enemy.hp = data.hp;
-        return enemy;
+    static create(game, bType, hp, data = {}) {
+        return new CoralShieldEnemy(game, bType || 'straight', hp || 6);
     }
 }
-
-
-
 
 /**
  * MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
  */
 export class MineDebrisEnemy extends Enemy {
     static DEFAULT_SPEED_Y = 1.2;
+    speedY = MineDebrisEnemy.DEFAULT_SPEED_Y;
 
     get imageName() { return "enemy_mine_debris.webp"; }
 
-    constructor(game, x, y, bulletType, speedY = MineDebrisEnemy.DEFAULT_SPEED_Y) {
-        super(game, x, y, 'none', Infinity);
-        this.speedY = speedY;
+    constructor(game, bulletType = 'none', hp = Infinity) {
+        super(game, 'none', Infinity);
     }
 
     update(game) {
@@ -328,13 +347,15 @@ export class MineDebrisEnemy extends Enemy {
         this.y += this.speedY;
     }
 
-    takeDamage(_amount) {
+    takeDamage(game, _amount) {
         // 完全無敵
         return false;
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new MineDebrisEnemy(game, x, y, bType, data.speedY ?? MineDebrisEnemy.DEFAULT_SPEED_Y);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new MineDebrisEnemy(game, 'none', Infinity);
+        if (data.speedY !== undefined) enemy.speedY = data.speedY;
+        return enemy;
     }
 }
 
@@ -347,21 +368,25 @@ export class MineDebrisEnemy extends Enemy {
  * 特徴: 潜航（水没・半透明化＆無敵）と浮上（全方位弾幕）を繰り返すトリッキーな水棲母艦ボス
  */
 export class BossEnemy_02 extends BossEnemy {
+    state = 'APPEAR';
+    timer = 0;
+    alpha = 1.0;
+
     get imageName() { return "enemy_boss_02.webp"; }
 
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -128; // 上部画面外から進入
-        super(game, x, y, hp, timeLimit, timeMultiplier);
+    constructor(game, hp = 50, timeLimit, timeMultiplier) {
+        super(game, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
         this.width = 140;
         this.height = 96;
         this.hitWidth = 110;
         this.hitHeight = 70;
+    }
 
-        this.state = 'APPEAR'; 
-        this.timer = 0;
-        this.baseX = x;
-        this.alpha = 1.0; 
+    setStartPosition(x, y) {
+        const startY = -128; // 上部画面外から進入
+        super.setStartPosition(x, startY);
+        this.baseX = this.startX;
     }
 
     update(game) {
@@ -381,7 +406,8 @@ export class BossEnemy_02 extends BossEnemy {
 
             case 'ATTACK_NORMAL':
                 // 水面を揺蕩うような大きなゆったり横移動
-                this.x = this.baseX + Math.sin(this.timer * 0.03) * 80;
+                const bx1 = this.baseX ?? this.startX;
+                this.x = bx1 + Math.sin(this.timer * 0.03) * 80;
 
                 if (this.timer % 30 === 0) {
                     this.bulletType = 'aim';
@@ -403,7 +429,7 @@ export class BossEnemy_02 extends BossEnemy {
                     this.isInvincible = true; // 完全潜航で無敵化
                     
                     // 完全透明になった後で安全にワープ移動
-                    const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : (game.width || 320);
+                    const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : (game?.width || 320);
                     const padding = 50;
                     this.x = padding + Math.random() * (gameWidth - this.width - padding * 2);
                     this.baseX = this.x; // 🎯 移動先を新しい揺れ中心点にする
@@ -440,7 +466,7 @@ export class BossEnemy_02 extends BossEnemy {
         }
     }
 
-    draw(ctx, isInvincibleCheat = false) {
+    draw(ctx, isDebug = false) {
         ctx.save();
         ctx.globalAlpha = this.alpha;
         
@@ -448,7 +474,7 @@ export class BossEnemy_02 extends BossEnemy {
         if (this.isInvincible) {
             ctx.filter = 'blur(3px) brightness(0.6) saturate(0.5) hue-rotate(200deg)';
         }
-        super.draw(ctx, isInvincibleCheat);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
@@ -456,7 +482,7 @@ export class BossEnemy_02 extends BossEnemy {
         // 水中母艦が水圧と爆破で崩壊していく連鎖大爆発演出
         for (let i = 0; i < 8; i++) {
             setTimeout(() => {
-                if (game.collisions) {
+                if (game?.collisions) {
                     game.collisions.createExplosion(
                         this.x + Math.random() * this.width, 
                         this.y + Math.random() * this.height, 
@@ -467,12 +493,12 @@ export class BossEnemy_02 extends BossEnemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
+    static create(game, bType, hp, data = {}) {
         return new BossEnemy_02(
-            game, x, y, 
-            data.hp || 50, 
-            data.timeLimit || 1800, 
-            data.timeMultiplier || 100
+            game, 
+            hp || 50, 
+            data.timeLimit, 
+            data.timeMultiplier
         );
     }
 }

@@ -7,7 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+"use strict";
+
+import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-3 固有のザコ・中型敵クラス群
@@ -17,19 +19,22 @@ import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  * 1. WindSlicer: 画面左右の外側から超高速で水平横断する風切りストライカー
  */
 export class WindSlicerEnemy extends Enemy {
+    isLeftToRight = true;
+    speedX = 7.0;
+    hasShot = false;
+
     get imageName() { return "enemy_wind_slicer.webp"; }
 
-    constructor(game, x, y, bulletType, isLeftToRight = true) {
-        super(game, x, y, bulletType, 1); // HP = 1
+    constructor(game, bulletType = 'straight', hp = 1) {
+        super(game, bulletType, hp);
         this.width = 40;
         this.height = (157 / 241) * 40;
-        this.isLeftToRight = isLeftToRight;
-        
-        // 指定された x は使わない、画面外にセット
-        this.x = isLeftToRight ? -this.width : game.width + this.width;
+    }
 
-        this.speedX = isLeftToRight ? 7.0 : -7.0; // 超高速水平移動
-        this.hasShot = false;
+    /** 方向と速度の設定 */
+    setDirection(isLeftToRight) {
+        this.isLeftToRight = isLeftToRight;
+        this.speedX = isLeftToRight ? 7.0 : -7.0;
     }
 
     update(game) {
@@ -37,7 +42,7 @@ export class WindSlicerEnemy extends Enemy {
 
         this.x += this.speedX;
 
-        // 画面中央を通過する瞬間に1発だけ鋭い直進弾を放つ
+        // 画面中央を通過する瞬間に1発だけ親の shoot(game) で射撃
         const isNearCenter = this.isLeftToRight 
             ? (this.x >= game.width / 2) 
             : (this.x <= game.width / 2);
@@ -53,11 +58,12 @@ export class WindSlicerEnemy extends Enemy {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
+        if (!this.active) return;
+
         ctx.save();
         // 右から左へ向かう場合（!isLeftToRight）は左右反転を行う
         if (!this.isLeftToRight) {
-            // 画像の中心位置を軸にしてX軸方向に反転
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
 
@@ -65,14 +71,18 @@ export class WindSlicerEnemy extends Enemy {
             ctx.scale(-1, 1);
             ctx.translate(-centerX, -centerY);
         }
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore(); 
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const isLeft = data.isLeft !== undefined ? data.isLeft : true;
-        // YAMLデータ側で x が 0 として渡されている場合、画面外からの出現にしたい場合は x を渡さないか null にします
-        return new WindSlicerEnemy(game, x, y, bType, isLeft);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new WindSlicerEnemy(game, bType, hp);
+        
+        // data.from が 'right' または data.isLeft が false なら右から左へ移動
+        const isLeftToRight = data.from === 'right' ? false : (data.isLeft !== undefined ? data.isLeft : true);
+        enemy.setDirection(isLeftToRight);
+        
+        return enemy;
     }
 }
 
@@ -80,56 +90,62 @@ export class WindSlicerEnemy extends Enemy {
  * 2. CloudLurker: 雲の中に隠れて半透明で出現し、射撃時のみ実体化（グラフィック明瞭化）する奇襲機
  */
 export class CloudLurkerEnemy extends Enemy {
+    speed = 1.2;
+    alpha = 0.25; // 雲の中（半透明）
+
     get imageName() { return "enemy_cloud_lurker.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2); // HP = 2
-        this.speed = 1.2;
-        this.timer = 0;
-        this.alpha = 0.25; // 雲の中（半透明）
+    constructor(game, bulletType = 'aim', hp = 2) {
+        super(game, bulletType, hp);
+        this.baseShootInterval = 60; // 60フレーム間隔で射撃
     }
 
     update(game) {
         if (!this.active) return;
-        this.timer++;
 
         this.y += this.speed;
 
-        // 60F（1秒）ごとに雲から姿を現して射撃
-        if (this.timer % Math.floor(60 / this.fireRateMultiplier) === 0) {
-            this.alpha = 1.0; // 実体化
-            this.shoot(game);
+        // 前回発射時からのカウント（shootTimer）を監視して透過度を制御
+        const currentInterval = Math.max(1, Math.floor(this.baseShootInterval / this.fireRateMultiplier));
+        if (this.shootTimer >= currentInterval - 1) {
+            this.alpha = 1.0; // 発射直前に実体化
         } else {
-            // 徐々に半透明に戻って雲へ隠れる
+            // 徐々に半透明に戻る
             this.alpha = Math.max(0.25, this.alpha - 0.05);
         }
+
+        // 親クラスの自動射撃カウンター＆発射処理を実行
+        super.update(game);
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
+        if (!this.active) return;
+
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new CloudLurkerEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new CloudLurkerEnemy(game, bType, hp);
     }
 }
 
 /**
- * 4. SkyFalcon: 自機の上空に漂い、自機が直下に重なった瞬間に超高速で垂直急降下（ダイブ）するドッグファイト機
+ * 3. SkyFalcon: 自機の上空に漂い、自機が直下に重なった瞬間に超高速で垂直急降下（ダイブ）するドッグファイト機
  */
 export class SkyFalconEnemy extends Enemy {
+    state = 'HOVER'; // HOVER, LOCKON, DIVE
+    timer = 0;
+    speedX = 1.8;
+
     get imageName() { return "enemy_sky_falcon.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2); // HP = 2
+    constructor(game, bulletType = 'aim', hp = 2) {
+        super(game, bulletType, hp);
         this.width = 32;
         this.height = (155 / 135) * 32;
-        this.state = 'HOVER'; // HOVER, LOCKON, DIVE
-        this.timer = 0;
-        this.speedX = 1.8;
     }
 
     update(game) {
@@ -157,7 +173,7 @@ export class SkyFalconEnemy extends Enemy {
 
                 if (this.timer >= 15) {
                     this.state = 'DIVE';
-                    this.shoot(game); // 突撃開始時に1発
+                    this.shoot(game); // 突撃開始時に1発射撃
                 }
                 break;
 
@@ -167,104 +183,78 @@ export class SkyFalconEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new SkyFalconEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new SkyFalconEnemy(game, bType, hp);
     }
 }
 
 /**
- * 5. AegisCruiser: 両脇に小型ビット（護衛機）を連れて現れる大型巡洋機
+ * 4. AegisCruiser: 大型巡洋機（設定された bulletType に応じて定期射撃）
  */
 export class AegisCruiserEnemy extends Enemy {
+    speedY = 0.6;
+
     get imageName() { return "enemy_aegis_cruiser.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 8); // 高耐久 HP = 8
+    constructor(game, bulletType = 'eight-way', hp = 8) {
+        super(game, bulletType, hp);
         this.width = (250 / 183) * 64;
         this.height = 64;
-        this.speedY = 0.6;
-        this.timer = 0;
+        this.baseShootInterval = 90; // 90フレーム間隔
     }
 
     update(game) {
         if (!this.active) return;
-        this.timer++;
 
         this.y += this.speedY;
 
-        // 定期的に8方向拡散弾を撒き散らす
-        if (this.timer % Math.floor(90 / this.fireRateMultiplier) === 0) {
-            this.bulletType = 'eight-way';
-            this.shoot(game);
-        }
+        // 親クラスの自動射撃カウンター＆発射処理に任せる
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new AegisCruiserEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new AegisCruiserEnemy(game, bType, hp);
         if (data.hp) enemy.hp = data.hp;
         return enemy;
     }
 }
 
-
-/// ==========================================
+// ==========================================
 // 2. STAGE-3 ボス実体
 // ==========================================
+
 /**
  * STAGE-3 ボス: 蒼穹龍神（BossEnemy_03）
- * 特徴: ハイスピードなS字蛇行と、ブラススタブ（キメ音）と同調した急降下突撃を放つドラゴンボス
  */
 export class BossEnemy_03 extends BossEnemy {
+    state = 'APPEAR';
+    timer = 0;
+
     get imageName() { return "enemy_boss_03.webp"; }
 
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        y = -160;
-        super(game, x, y, hp, timeLimit, timeMultiplier);
+    constructor(game, hp = 700, timeLimit, timeMultiplier) {
+        super(game, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
         this.width = 160;
         this.height = (505 / 482) * 160; // 約 167px
-
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
+        this.y = -160; // 上部画面外から進入
     }
 
-    /**
-     * 部位ごとの判定領域とダメージ倍率（マルチヒットボックス）
-     * 配列の先頭（HEAD）から判定評価を行うことで、頭と本体が重なる領域でも頭の判定が優先されます。
-     */
+    /** 部位ごとの判定領域とダメージ倍率（マルチヒットボックス） */
     getHitboxes() {
-        // 1. 龍の頭部（手前に大きく出っ張っている弱点）
         const headW = 40;
         const headH = 50;
         const headX = this.x + (this.width - headW) / 2;
-        const headY = this.y + this.height - headH; // 下端に合わせて飛び出させる
+        const headY = this.y + this.height - headH;
 
-        // 2. 城郭本体（上部のメイン装甲）
         const bodyW = 120;
         const bodyH = 120;
         const bodyX = this.x + (this.width - bodyW) / 2;
         const bodyY = this.y + 10;
 
         return [
-            // 🎯 弱点: 龍の頭部 (被弾ダメージ 2倍)
-            {
-                part: 'HEAD',
-                multiplier: 2.0,
-                x: headX,
-                y: headY,
-                width: headW,
-                height: headH
-            },
-            // 🛡️ 通常: 城郭（本体） (被弾ダメージ 1倍)
-            {
-                part: 'BODY',
-                multiplier: 1.0,
-                x: bodyX,
-                y: bodyY,
-                width: bodyW,
-                height: bodyH
-            }
+            { part: 'HEAD', multiplier: 2.0, x: headX, y: headY, width: headW, height: headH },
+            { part: 'BODY', multiplier: 1.0, x: bodyX, y: bodyY, width: bodyW, height: bodyH }
         ];
     }
 
@@ -274,27 +264,23 @@ export class BossEnemy_03 extends BossEnemy {
 
         switch (this.state) {
             case 'APPEAR':
-                this.y += 1.5; // 高速進入
-                if (this.y >= 60) {
+                this.y += 1.5;
+                if (this.y >= 40) {
                     this.state = 'SINE_DRIVE';
                     this.timer = 0;
-                    // 🎯 到着時のX位置をベース座標に確定
-                    this.baseX = this.x;
+                    this.startX = this.x;
                 }
                 break;
 
             case 'SINE_DRIVE':
-                // メタルの高速ベースラインに合わせたダイナミックなS字運動
-                // ※ timer=0 の時 cos(0)=1 となるため、Yの基準位置を 60 から調整 (90-30=60 からスタート)
-                this.x = this.baseX + Math.sin(this.timer * 0.06) * 100;
-                this.y = 60 + (1 - Math.cos(this.timer * 0.03)) * 30; // 🎯 timer=0でy=60から滑らかにスタート
+                this.x = this.startX + Math.sin(this.timer * 0.06) * 100;
+                this.y = 40 + (1 - Math.cos(this.timer * 0.03)) * 30;
 
                 if (this.timer % 24 === 0) {
                     this.bulletType = 'triple';
                     this.shoot(game);
                 }
 
-                // 400Fごとに画面下部への急降下突撃
                 if (this.timer > 400) {
                     this.state = 'DRAGON_CHARGE';
                     this.timer = 0;
@@ -302,7 +288,7 @@ export class BossEnemy_03 extends BossEnemy {
                 break;
 
             case 'DRAGON_CHARGE':
-                this.y += 6.0; // 牙を剥いて突撃
+                this.y += 6.0;
                 if (this.timer % 10 === 0) {
                     this.bulletType = 'eight-way';
                     this.shoot(game);
@@ -314,14 +300,12 @@ export class BossEnemy_03 extends BossEnemy {
                 break;
 
             case 'RETREAT':
-                // 上空の定位置へと帰還（x, y 共に強力かつ滑らかに目標点へ補間）
-                this.y += (60 - this.y) * 0.1; // 🎯 Y=60 目標へイージング帰還
-                this.x += (this.baseX - this.x) * 0.1; // 🎯 X=baseX 目標へ強力にイージング帰還
+                this.y += (40 - this.y) * 0.1;
+                this.x += (this.startX - this.x) * 0.1;
 
-                // 充分に目標地点に近付いたら切り替え（跳躍を防止）
-                if (Math.abs(this.y - 60) < 1.0 && Math.abs(this.x - this.baseX) < 1.0) {
-                    this.y = 60;
-                    this.x = this.baseX;
+                if (Math.abs(this.y - 40) < 1.0 && Math.abs(this.x - this.startX) < 1.0) {
+                    this.y = 40;
+                    this.x = this.startX;
                     this.state = 'SINE_DRIVE';
                     this.timer = 0;
                 }
@@ -329,10 +313,10 @@ export class BossEnemy_03 extends BossEnemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
+    static create(game, bType, hp, data = {}) {
         return new BossEnemy_03(
-            game, x, y, 
-            data.hp || 70, 
+            game, 
+            hp || 700, 
             data.timeLimit || 1800, 
             data.timeMultiplier || 100
         );

@@ -109,6 +109,13 @@ export class Player extends Entity {
         if (weaponContainer) weaponContainer.style.display = 'block';
     }
 
+    /**
+     * 画面外判定（プレイヤーは判定しない）
+     */
+    isOutOfBounds(game, margin) {
+        return false;
+    }
+
     /** プレイヤーの入力と状態に応じて位置・武器・射撃を一括更新する */
     update(cw, ch) {
         if (!this.alive) return;

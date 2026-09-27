@@ -30,20 +30,13 @@ export class Entity {
      * 共通の画面外判定（弾や通常エフェクト用）
      * @param {number} margin 許容マージン
      */
-    isOutOfBounds(margin = 32) {
-        // 🛑 【最優先セーフティ】NaN ガード
+    isOutOfBounds(game, margin = 32) {
+        // 【最優先セーフティ】NaN ガード
         if (Number.isNaN(this.x) || Number.isNaN(this.y)) return true;
-
-        // 🛑 【プレイヤー保護】Playerは画面外判定で絶対消さない
-        if (this.constructor && this.constructor.name === 'Player') return false;
-
-        const gameWidth = typeof GAME_CONFIG !== 'undefined' ? game.width : 800;
-        const gameHeight = typeof GAME_CONFIG !== 'undefined' ? game.height : 600;
-
         return (
-            this.y > gameHeight + margin || 
+            this.y > game.height + margin || 
             this.y < -margin || 
-            this.x > gameWidth + margin || 
+            this.x > game.width  + margin || 
             this.x < -margin
         );
     }

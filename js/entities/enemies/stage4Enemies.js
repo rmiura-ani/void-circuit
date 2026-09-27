@@ -7,7 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+"use strict";
+
+import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
 
 // ==========================================
 // 1. STAGE-4 固有のザコ・中型敵クラス群
@@ -19,21 +21,22 @@ import { Enemy, BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
 export class DustScoutEnemy extends Enemy {
     get imageName() { return "enemy_dust_scout.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        // yは利用せず、画面最下部からスポーン
-        const spawnY = game.height + 32;
-        super(game, x, spawnY, bulletType, 1); // HP = 1
-        this.speedY = -2.5; // 上昇移動
+    constructor(game, bulletType = 'aim', hp = 1) {
+        super(game, bulletType, hp);
+        this.speedY = -2.5;
         this.hasShot = false;
     }
+
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
+    }    
 
     update(game) {
         if (!this.active) return;
 
         this.y += this.speedY;
 
-        // 画面の中央高度に差し掛かった瞬間に狙い撃ち弾を放つ
-        if (this.y <= game.height / 2 && !this.hasShot) {
+        if (this.y <= (game?.height || 600) / 2 && !this.hasShot) {
             this.shoot(game);
             this.hasShot = true;
         }
@@ -43,8 +46,8 @@ export class DustScoutEnemy extends Enemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new DustScoutEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new DustScoutEnemy(game, bType, hp);
     }
 }
 
@@ -52,16 +55,18 @@ export class DustScoutEnemy extends Enemy {
  * 2. RelicPrism: 八角形の古代パーツ。一定位置で静止・回転しながら幾何学的な格子状クロス弾幕を生成
  */
 export class RelicPrismEnemy extends Enemy {
+    stopY = 120;
+    timer = 0;
+    rotationAngle = 0;
+    state = 'MOVE_IN';
+
     get imageName() { return "enemy_relic_prism.webp"; }
 
-    constructor(game, x, y, bulletType, stopY = 120) {
-        super(game, x, y, bulletType, 3); // HP = 3
+    constructor(game, bulletType = 'cross', hp = 3) {
+        super(game, bulletType, hp);
         this.width = 80;
         this.height = 80;
-        this.stopY = stopY;
-        this.timer = 0;
-        this.rotationAngle = 0;
-        this.state = 'MOVE_IN'; // MOVE_IN, ROTATE_FIRE, RETREAT
+        this.baseShootInterval = 50;
     }
 
     update(game) {
@@ -77,13 +82,11 @@ export class RelicPrismEnemy extends Enemy {
 
             case 'ROTATE_FIRE':
                 this.timer++;
-                this.rotationAngle += 0.05; // 幾何学的な回転
+                // 角度を更新（親クラスの shoot() がこの rotationAngle を参照してクロス弾を発射）
+                this.rotationAngle += 0.05;
 
-                // 連射間隔がゼロ以下にならないよう Math.max(1, ...) で保護
-                const interval = Math.max(1, Math.floor(50 / (this.fireRateMultiplier || 1)));
-                if (this.timer % interval === 0) {
-                    this.shootCrossBullet(game);
-                }
+                // 🎯 自動射撃＆画面内判定を親クラスに一任
+                super.update(game);
 
                 if (this.timer >= 250) {
                     this.state = 'RETREAT';
@@ -96,20 +99,10 @@ export class RelicPrismEnemy extends Enemy {
         }
     }
 
-    shootCrossBullet(game) {
-        const bx = this.x + this.width / 2;
-        const by = this.y + this.height / 2;
-
-        for (let i = 0; i < 4; i++) {
-            const angle = this.rotationAngle + (Math.PI / 2) * i;
-            const vx = Math.cos(angle) * 3.0;
-            const vy = Math.sin(angle) * 3.0;
-            game.entities.push(new EnemyBullet(bx, by, vx, vy));
-        }
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        return new RelicPrismEnemy(game, x, y, bType, data.stopY || 120);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new RelicPrismEnemy(game, bType, hp);
+        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        return enemy;
     }
 }
 
@@ -117,13 +110,14 @@ export class RelicPrismEnemy extends Enemy {
  * 3. MirageCrawler: 砂漠の蜃気楼（ラスタスクロール波形）のようにX軸がブレながらゆっくり降下する機体
  */
 export class MirageCrawlerEnemy extends Enemy {
+    speedY = 1.0;
+    timer = Math.random() * 100;
+
     get imageName() { return "enemy_mirage_crawler.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 2); // HP = 2
-        this.baseX = x;
-        this.speedY = 1.0;
-        this.timer = Math.random() * 100;
+    constructor(game, bulletType = 'aim', hp = 2) {
+        super(game, bulletType, hp);
+        this.baseShootInterval = 80;
     }
 
     update(game) {
@@ -131,17 +125,13 @@ export class MirageCrawlerEnemy extends Enemy {
         this.timer += 0.1;
 
         this.y += this.speedY;
-        // 蜃気楼特有の細かく歪むラスタ揺らぎ運動
-        this.x = this.baseX + Math.sin(this.timer) * 35;
+        this.x = this.startX + Math.sin(this.timer) * 35;
 
-        if (Math.floor(this.timer * 10) % 80 === 0) {
-            this.shoot(game);
-        }
-
+        super.update(game);
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new MirageCrawlerEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new MirageCrawlerEnemy(game, bType, hp);
     }
 }
 
@@ -149,16 +139,15 @@ export class MirageCrawlerEnemy extends Enemy {
  * 4. SandPillar: 縦長柱状の防壁構造。前面からの通常弾を大幅軽減/跳ね返す無効化ガードを持つ
  */
 export class SandPillarEnemy extends Enemy {
+    speedY = 0.5;
+    hitFlashTimer = 0;
+
     get imageName() { return "enemy_sand_pillar.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 5); // HP = 5
+    constructor(game, bulletType = 'none', hp = 5) {
+        super(game, bulletType, hp);
         this.width = 64;
-        this.height = (467/394) * 64;
-        this.speedY = 0.5;
-
-        // 💡 フラッシュ用タイマー（フレーム数）
-        this.hitFlashTimer = 0;
+        this.height = (467 / 394) * 64;
     }
 
     update(game) {
@@ -166,40 +155,28 @@ export class SandPillarEnemy extends Enemy {
 
         this.y += this.speedY;
 
-        // 💡 被弾フラッシュのタイマー更新
         if (this.hitFlashTimer > 0) {
             this.hitFlashTimer--;
         }
     }
 
-    /** 砂の防壁：ダメージ軽減処理 */
-    takeDamage(amount) {
+    takeDamage(game, amount) {
         const reducedAmount = Math.max(1, Math.floor(amount * 0.5));
-
-        // 💡 被弾時にフラッシュタイマーをセット（例: 5フレーム間光る）
         this.hitFlashTimer = 5;
-
-        return super.takeDamage(reducedAmount);
+        return super.takeDamage(game, reducedAmount);
     }
 
-    /** 💡 被弾時に発光させる描画処理 */
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         ctx.save();
-
         if (this.hitFlashTimer > 0) {
-            // 方法1: 明度とコントラストを大きく上げて全体を白く輝かせる（おすすめ）
             ctx.filter = 'brightness(3.0) contrast(1.5)';
-            
-            // （参考）もし黄色やオレンジっぽくシールド風に光らせたい場合はこちら：
-            // ctx.filter = 'brightness(2.0) drop-shadow(0px 0px 10px #FFD700)';
         }
-
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new SandPillarEnemy(game, x, y, bType);
+    static create(game, bType, hp, data = {}) {
+        return new SandPillarEnemy(game, bType, hp);
     }
 }
 
@@ -207,14 +184,15 @@ export class SandPillarEnemy extends Enemy {
  * 5. GigaOrb: エネルギーチャージ（フラッシュ前兆）を行い、直線状に太い弾幕を一気に射出する高耐久コア
  */
 export class GigaOrbEnemy extends Enemy {
+    state = 'CHARGE';
+    timer = 0;
+
     get imageName() { return "enemy_giga_orb.webp"; }
 
-    constructor(game, x, y, bulletType) {
-        super(game, x, y, bulletType, 10); // HP = 10
-        this.width = (510/440) * 48;
+    constructor(game, bulletType = 'twin', hp = 10) {
+        super(game, bulletType, hp);
+        this.width = (510 / 440) * 48;
         this.height = 48;
-        this.state = 'CHARGE'; // CHARGE, FIRE, RETREAT
-        this.timer = 0;
     }
 
     update(game) {
@@ -225,7 +203,6 @@ export class GigaOrbEnemy extends Enemy {
                 this.y += 0.8;
                 this.timer++;
 
-                // チャージ完了（約2秒）で極太バースト発射フェーズへ
                 if (this.timer >= 120) {
                     this.state = 'FIRE';
                     this.timer = 0;
@@ -235,15 +212,12 @@ export class GigaOrbEnemy extends Enemy {
             case 'FIRE':
                 this.timer++;
 
-                // 5F刻みで真下に連続高密度高速射撃（擬似極太ビーム）
+                // 🎯 親クラスの bulletType='twin' 射撃を呼び出し
                 if (this.timer % 5 === 0) {
-                    const bx = this.x + this.width / 2;
-                    const by = this.y + this.height;
-                    game.entities.push(new EnemyBullet(bx - 8, by, 0, 6.0));
-                    game.entities.push(new EnemyBullet(bx + 8, by, 0, 6.0));
+                    this.shoot(game);
                 }
 
-                if (this.timer >= 60) { // 1秒間連射後退避
+                if (this.timer >= 60) {
                     this.state = 'RETREAT';
                 }
                 break;
@@ -254,37 +228,34 @@ export class GigaOrbEnemy extends Enemy {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         ctx.save();
-        // チャージ中は激しく赤黄色に点滅発光する演出
         if (this.state === 'CHARGE') {
             const glow = Math.sin(this.timer * 0.3) * 0.5 + 0.5;
             ctx.filter = `brightness(${1.0 + glow * 1.5}) saturate(${1.0 + glow * 2.0})`;
         }
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
-    static create(game, x, y, bType, data = {}) {
-        const enemy = new GigaOrbEnemy(game, x, y, bType);
-        if (data.hp) enemy.hp = data.hp;
-        return enemy;
+    static create(game, bType, hp, data = {}) {
+        return new GigaOrbEnemy(game, bType, hp);
     }
 }
 
-
 /**
- * RockEnemy: 超高速で垂直落下してくるデブリ・岩石型トラップ
+ * 6. RockEnemy: 超高速で垂直落下してくるデブリ・岩石型トラップ
  */
 export class RockEnemy extends Enemy {
     static DEFAULT_SPEED_Y = 6.0;
 
+    speedX = -0.5;
+    speedY = RockEnemy.DEFAULT_SPEED_Y;
+
     get imageName() { return "enemy_rock.webp"; }
 
-    constructor(game, x, y, bulletType, speedY = RockEnemy.DEFAULT_SPEED_Y) {
-        super(game, x, y, 'none', 1);
-        this.speedX = -0.5
-        this.speedY = speedY;
+    constructor(game, bulletType = 'none', hp = 1) {
+        super(game, bulletType, hp);
     }
 
     update(game) {
@@ -293,40 +264,36 @@ export class RockEnemy extends Enemy {
         this.y += this.speedY;
     }
 
-    static create(game, x, y, bType, data = {}) {
-        return new RockEnemy(game, x, y, bType, data.speedY ?? RockEnemy.DEFAULT_SPEED_Y);
+    static create(game, bType, hp, data = {}) {
+        const enemy = new RockEnemy(game, bType, hp);
+        if (data.speedY !== undefined) enemy.speedY = data.speedY;
+        return enemy;
     }
 }
 
 /**
- * WormSegment: 連結エネミー（多関節）の胴体・尻尾パーツ
+ * 7. WormSegment: 連結エネミー（多関節）の胴体・尻尾パーツ
  */
 export class WormSegment extends Enemy {
     static SEGMENT_SPACING = 20;
 
     constructor(game, head, index, isTail = false) {
-        // 1. super 呼び出し前に画像キーを特定
         const imageKey = isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp";
-
-        // 2. 親クラス Enemy の初期化（第4引数は画像キーまたはbulletTypeとして親の仕様に合わせる）
-        super(game, head.x, head.y - index * WormSegment.SEGMENT_SPACING, 'none', 1);
+        super(game, 'none', 1);
 
         this.head = head;
         this.index = index;
         this.isTail = isTail;
         this.customImageKey = imageKey;
 
-        // 3. 正しいアセットの割り当て
         if (game?.assets) {
             this.image = game.assets.get(imageKey);
         }
 
-        // サイズの初期化
         this.width = head.width || 24;
         this.height = head.height || 24;
     }
 
-    // Enemy クラスが imageName を参照する場合のフォールバック
     get imageName() {
         return this.customImageKey || (this.isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp");
     }
@@ -354,16 +321,16 @@ export class WormSegment extends Enemy {
         }
     }
 
-    takeDamage(amount) {
+    takeDamage(game, amount) {
         if (this.isSubmerged) return false;
-        const isDead = super.takeDamage(amount);
+        const isDead = super.takeDamage(game, amount);
         if (isDead && this.head) {
             this.head.removeSegment(this);
         }
         return isDead;
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         if (!this.active) return;
 
         ctx.save();
@@ -371,7 +338,6 @@ export class WormSegment extends Enemy {
             ctx.globalAlpha = 0.3;
         }
 
-        // 進行方向に応じた回転
         if (this.angle !== undefined) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
@@ -380,35 +346,27 @@ export class WormSegment extends Enemy {
             ctx.translate(-centerX, -centerY);
         }
 
-        // 描画自体は Enemy の共通処理（super.draw）に任せる
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
-    }
-
-    forceDestroy() {
-        this.active = false;
-        this.onDie(this.game, true);
     }
 }
 
 /**
- * WormEnemy: 連結エネミー（頭部）
+ * 8. WormEnemy: 連結エネミー（頭部）
  */
 export class WormEnemy extends Enemy {
     static DEFAULT_LENGTH = 6;
 
     get imageName() { return "stage-4/enemy_worm_head.webp"; }
 
-    constructor(game, x, y, bulletType, length = WormEnemy.DEFAULT_LENGTH, hp = 5) {
-        super(game, x, y, bulletType, hp);
+    constructor(game, bulletType = 'aim', hp = 5, length = WormEnemy.DEFAULT_LENGTH) {
+        super(game, bulletType, hp);
 
-        // 胴体・尻尾パーツの画像を確実にプリロードしておく
         if (game?.assets) {
             game.assets.get("stage-4/enemy_worm_body.webp");
             game.assets.get("stage-4/enemy_worm_tail.webp");
         }
 
-        this.baseX = x;
         this.speedY = 1.8;
         this.moveDirectionY = 1;
         this.timer = Math.random() * 100;
@@ -428,6 +386,11 @@ export class WormEnemy extends Enemy {
                 game.entities.push(seg);
             }
         }
+    }
+
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
+        this.baseX = x;
     }
 
     update(game) {
@@ -452,7 +415,7 @@ export class WormEnemy extends Enemy {
         const prevY = this.y;
 
         this.y += this.speedY * this.moveDirectionY;
-        this.x = this.baseX + Math.sin(this.timer * 1.5) * 80;
+        this.x = (this.baseX || this.startX) + Math.sin(this.timer * 1.5) * 80;
 
         const dx = this.x - prevX;
         const dy = this.y - prevY;
@@ -477,12 +440,12 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    takeDamage(amount) {
+    takeDamage(game, amount) {
         if (this.isSubmerged) return false;
-        return super.takeDamage(amount);
+        return super.takeDamage(game, amount);
     }
 
-    draw(ctx) {
+    draw(ctx, isDebug = false) {
         ctx.save();
         if (this.isSubmerged) {
             ctx.globalAlpha = 0.3;
@@ -496,7 +459,7 @@ export class WormEnemy extends Enemy {
             ctx.translate(-centerX, -centerY);
         }
 
-        super.draw(ctx);
+        super.draw(ctx, isDebug);
         ctx.restore();
     }
 
@@ -510,20 +473,8 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    takeDamageAndCheckDeath(amount) {
-        const isDead = super.takeDamage(amount);
-        if (isDead) {
-            this.segments.forEach((seg, i) => {
-                setTimeout(() => {
-                    seg.forceDestroy();
-                }, (i + 1) * 80);
-            });
-        }
-        return isDead;
-    }
-
-    static create(game, x, y, bType, data = {}) {
-        return new WormEnemy(game, x, y, bType, data.length ?? WormEnemy.DEFAULT_LENGTH, data.hp ?? 5);
+    static create(game, bType, hp, data = {}) {
+        return new WormEnemy(game, bType, hp || 5, data.length ?? WormEnemy.DEFAULT_LENGTH);
     }
 }
 
@@ -533,32 +484,31 @@ export class WormEnemy extends Enemy {
 
 /**
  * STAGE-4 ボス: 地上絵守護神（Ancient Golem / BossEnemy_04）
- * 特徴: 幾何学的な遺跡の地上絵をなぞるように多角形移動し、ポイント毎にサークル弾幕を展開する石像守護神
  */
 export class BossEnemy_04 extends BossEnemy {
+    state = 'APPEAR';
+    timer = 0;
+    targetPointIndex = 0;
+
     get imageName() { return "enemy_boss_04.webp"; }
 
-    constructor(game, x, y, hp, timeLimit, timeMultiplier) {
-        // 出現位置は引数の y または画面外上部 (-128)
-        const startY = (y !== undefined && y !== null) ? y : -128;
-        super(game, x, startY, hp, timeLimit, timeMultiplier);
+    constructor(game, hp = 800, timeLimit, timeMultiplier) {
+        super(game, hp, timeLimit, timeMultiplier);
         
         this.isBoss = true;
         this.width = 128;
         this.height = 128;
         this.hitWidth = 100;
         this.hitHeight = 100;
+    }
 
-        this.state = 'APPEAR';
-        this.timer = 0;
-        this.baseX = x;
-        // 地上絵（三角形〜ひし形）を描く目標チェックポイント
+    setStartPosition(x, y) {
+        super.setStartPosition(x, y);
         this.points = [
-            { x: x - 80, y: 50 },
-            { x: x + 80, y: 120 },
-            { x: x, y: 80 }
+            { x: this.startX - 80, y: 50 },
+            { x: this.startX + 80, y: 120 },
+            { x: this.startX, y: 80 }
         ];
-        this.targetPointIndex = 0;
     }
 
     update(game) {
@@ -575,23 +525,28 @@ export class BossEnemy_04 extends BossEnemy {
                 break;
 
             case 'PATROL_PATTERN':
+                if (!this.points) {
+                    this.points = [
+                        { x: this.startX - 80, y: 50 },
+                        { x: this.startX + 80, y: 120 },
+                        { x: this.startX, y: 80 }
+                    ];
+                }
+
                 const target = this.points[this.targetPointIndex];
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const dist = Math.hypot(dx, dy);
 
-                // ポイントへ向けて幾何学的に一直線に直線移動
                 if (dist > 4) {
                     this.x += (dx / dist) * 2.2;
                     this.y += (dy / dist) * 2.2;
                 } else {
-                    // 到着時に全方位8方向弾発射＆次の目標へ切り替え
                     this.targetPointIndex = (this.targetPointIndex + 1) % this.points.length;
                     this.bulletType = 'eight-way';
                     this.shoot(game);
                 }
 
-                // 移動中も定期的に狙い撃ち3WAY弾幕
                 if (this.timer % 35 === 0) {
                     this.bulletType = 'triple';
                     this.shoot(game);
@@ -600,16 +555,15 @@ export class BossEnemy_04 extends BossEnemy {
         }
     }
 
-    static create(game, x, y, bType, data = {}) {
+    static create(game, bType, hp, data = {}) {
         return new BossEnemy_04(
-            game, x, y, 
-            data.hp || 80, 
-            data.timeLimit || 1800, 
-            data.timeMultiplier || 100
+            game, 
+            hp || 800, 
+            data.timeLimit, 
+            data.timeMultiplier
         );
     }
 }
-
 
 // ==========================================
 // 3. ENEMY_REGISTRY への自動登録

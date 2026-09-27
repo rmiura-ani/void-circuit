@@ -58,11 +58,14 @@ a {
 #game-container {
     container-type: size;
     position: relative;
-    width: 95vw; 
-    height: 80dvh;
-    max-width: calc(80dvh * 2 / 3);
-    max-height: 80dvh;
+    
+    /* 2:3 のアスペクト比（縦画面シューティング）を常に維持して画面内に収める */
     aspect-ratio: 2 / 3;
+    width: 100%;
+    height: 100%;
+    max-width: min(95vw, calc(90dvh * 2 / 3));
+    max-height: min(90dvh, calc(95vw * 3 / 2));
+    
     background: var(--color-black);
     box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
     margin: auto; 
@@ -73,13 +76,14 @@ a {
 canvas, 
 #eq-overlay-canvas {
     display: block;
-    image-rendering: pixelated;
+    image-rendering: pixelated;      /* ドット絵をクッキリ表示 */
     image-rendering: crisp-edges;
 }
 
 canvas {
     width: 100%;
     height: 100%;
+    object-fit: contain;             /* アスペクト比を崩さずコンテナにフィット */
     margin: 0 auto;
     touch-action: none;
     z-index: var(--z-game-canvas);
