@@ -11,82 +11,93 @@
 export class GameUIManager {
     constructor(game) {
         this.game = game;
+        
+        // --- DOM要素のキャッシュ（描画・更新パフォーマンスの最適化） ---
+        this.dom = {
+            startScreen: document.getElementById('start-screen'),
+            livesDisplay: document.getElementById('lives-display'),
+            weaponContainer: document.getElementById('weapon-container'),
+            scoreDisplay: document.getElementById('score-display'),
+            hiScoreDisplay: document.getElementById('hi-score-display'),
+            gameContainer: document.getElementById('game-container'),
+            debugInfo: document.getElementById('debug-info'),
+            fullscreenKv: document.getElementById('fullscreen-kv'),
+            warpPlayer: document.getElementById('fullscreen-warp-player')
+        };
+
         this.resetGameUIState();
     }
 
-// 🚀 ゲーム開始時・リトライ時に呼び出し、UI全体の表示や演出状態を初期化する
+    // 🚀 UI・KV・演出状態をリセットする
     resetGameUIState() {
-        // --- A. 【game.jsから引っ越し】ゲーム開始時の画面要素のトグル ---
-        const startScreen = document.getElementById('start-screen');
-        if (startScreen) startScreen.style.display = 'none';
+        // --- A. DOM要素のトグル ---
+        if (this.dom.startScreen) this.dom.startScreen.style.display = 'none';
+        if (this.dom.livesDisplay) this.dom.livesDisplay.style.display = 'block';
+        if (this.dom.weaponContainer) this.dom.weaponContainer.style.display = 'block';
 
-        const livesDisplay = document.getElementById('lives-display');
-        if (livesDisplay) livesDisplay.style.display = 'block';
+        if (this.dom.scoreDisplay) this.dom.scoreDisplay.classList.remove('counter-stop');
+        if (this.dom.hiScoreDisplay) this.dom.hiScoreDisplay.classList.remove('counter-stop');
 
-        const weaponContainer = document.getElementById('weapon-container');
-        if (weaponContainer) weaponContainer.style.display = 'block';
+        // --- B. KV演出状態の初期化 ---
+        this.isKvActive = false; // 現在KVを描画中かどうかのフラグ
+        this._kvShown = false;   // このステージでKVを開始したかどうかのフラグ
 
-        const scoreEl = document.getElementById('score-display');
-        if (scoreEl) scoreEl.classList.remove('counter-stop');
+        // --- C. 🚀 【残像撃退】Canvasを全消去（真っ黒）にする ---
+        if (this.game.ctx) {
+            const ctx = this.game.ctx;
+            const width = this.game.width || ctx.canvas?.width || 0;
+            const height = this.game.height || ctx.canvas?.height || 0;
 
-        const hiScoreEl = document.getElementById('hi-score-display');
-        if (hiScoreEl) hiScoreEl.classList.remove('counter-stop');
+            if (width > 0 && height > 0) {
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // 変形をリセットして全画面を確実に塗る
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, width, height);
+                ctx.restore();
+            }
+        }
 
-
-        // --- B. エンディング演出関連のリセット（既存のロジック） ---
+        // --- D. エンディング演出関連のリセット ---
         this._endingPhase = 0;
         this._endingTimer = 0;
         this._endingKvAlpha = 0;
         this.game.isEnding = false;
 
-        const domKv = document.getElementById('fullscreen-kv');
-        const warpPlayer = document.getElementById('fullscreen-warp-player');
-        
-        if (domKv) {
-            domKv.style.display = 'none';
-            domKv.style.opacity = '0';
+        if (this.dom.fullscreenKv) {
+            this.dom.fullscreenKv.style.display = 'none';
+            this.dom.fullscreenKv.style.opacity = '0';
         }
-        if (warpPlayer) {
-            warpPlayer.style.opacity = '1';
-            warpPlayer.classList.remove('trigger-warp');
+        if (this.dom.warpPlayer) {
+            this.dom.warpPlayer.style.opacity = '1';
+            this.dom.warpPlayer.classList.remove('trigger-warp');
         }
     }
 
- updateScoreUI() {
-        // カンストの上限値を共通定義
+    updateScoreUI() {
         const MAX_DISPLAY_SCORE = 99999990;
 
-        // --- 1. プレイヤーの現在スコア表示 ---
-        const scoreEl = document.getElementById('score-display');
-        if (scoreEl) {
+        if (this.dom.scoreDisplay) {
             const displayScore = Math.min(this.game.score, MAX_DISPLAY_SCORE);
-            scoreEl.innerText = `SCORE: ${displayScore.toString().padStart(8, '0')}`;
+            this.dom.scoreDisplay.innerText = `SCORE: ${displayScore.toString().padStart(8, '0')}`;
             
-            // カンストに達し、かつ「まだ音が鳴っていない瞬間」だけ一度だけ実行
             if (this.game.score >= MAX_DISPLAY_SCORE && !this.game.hasCounterStopped) {
-                scoreEl.classList.add('counter-stop');
+                this.dom.scoreDisplay.classList.add('counter-stop');
                 if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
                 this.game.hasCounterStopped = true;
             }
-            // 💡 毎フレームの else { remove } はゲーム開始時のリセットに任せたので、丸ごと削除！
         }
 
-        // --- 2. ハイスコア側の表示制御 ---
-        const hiScoreEl = document.getElementById('hi-score-display');
-        if (hiScoreEl) {
+        if (this.dom.hiScoreDisplay) {
             const currentHi = this.game.sc.highScore; 
             const displayHiScore = Math.min(currentHi, MAX_DISPLAY_SCORE);
             
-            hiScoreEl.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(8, '0')}`;
+            this.dom.hiScoreDisplay.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(8, '0')}`;
             
-            // ハイスコア側も、カンストした時だけクラスを付与
-            // （ゲーム開始時に白に戻っているため、超えた瞬間だけ付ければOK）
             if (currentHi >= MAX_DISPLAY_SCORE) {
-                hiScoreEl.classList.add('counter-stop');
+                this.dom.hiScoreDisplay.classList.add('counter-stop');
             }
         }
         
-        // --- 3. エクステンド処理 ---
         if (!this.game.hasExtended && this.game.extendThreshold !== 'NONE' && this.game.score >= this.game.extendThreshold) {
             this.game.currentLives++;
             if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
@@ -96,13 +107,13 @@ export class GameUIManager {
     }
 
     triggerExtendBlink() {
-        const el = document.getElementById('lives-display');
+        const el = this.dom.livesDisplay;
         el?.classList.add('extend-blink');
         setTimeout(() => el?.classList.remove('extend-blink'), 2000);
     }
 
     updateLivesUI() {
-        const el = document.getElementById('lives-display');
+        const el = this.dom.livesDisplay;
         if (!el) return;
         const count = Math.max(0, this.game.currentLives - 1);
         const icon = "🚀";
@@ -110,7 +121,7 @@ export class GameUIManager {
     }
 
     visualEffectWarning() {
-        const container = document.getElementById('game-container');
+        const container = this.dom.gameContainer;
         if (!container) return;
         container.style.transition = "filter 0.1s";
         container.style.filter = "brightness(1.2) sepia(1) saturate(5) hue-rotate(-50deg)";
@@ -118,7 +129,7 @@ export class GameUIManager {
     }
 
     updateDebugInfo() {
-        const debugEl = document.getElementById('debug-info');
+        const debugEl = this.dom.debugInfo;
         if (!debugEl || !this.game.isInvincibleCheat) {
             if (debugEl) debugEl.style.display = 'none';
             return;
@@ -143,7 +154,6 @@ export class GameUIManager {
         }        
         document.getElementById('debug-load').innerText = this.game.entities.length;
 
-        // 🌟 ここから追記：SPAWN と KILL の数値を画面に反映
         const spawnEl = document.getElementById('debug-spawn');
         if (spawnEl) spawnEl.innerText = this.game.stats.enemiesSpawned;
 
@@ -157,94 +167,78 @@ export class GameUIManager {
         ctx.textAlign = 'center';
 
         // ---------------------------------------------------------------
-        // 🌟 【最優先】ステージ7（最終）クリア・エンディング演出割り込み（HTML完全移行版）
+        // 🌟 【最優先1】ステージ7クリア・エンディング演出（HTML遷移）
         // ---------------------------------------------------------------
         if (this.game.isEnding) {
-            const domKv = document.getElementById('fullscreen-kv');
-            const container = document.getElementById('game-container');
-            const warpPlayer = document.getElementById('fullscreen-warp-player');
+            const domKv = this.dom.fullscreenKv;
+            const container = this.dom.gameContainer;
+            const warpPlayer = this.dom.warpPlayer;
             
             if (this._endingPhase === 0) {
                 this._endingPhase = 1;
                 this._endingTimer = 0;
 
-                // 🚀 1. ゲーム本体（Canvas含む）をまるごと非表示にして虚無バグを完全遮断！
                 if (container) container.style.display = 'none';
 
-                // 🚀 2. フルスクリーンHTMLを発動して画像と文字、自機をON
                 if (domKv) {
                     const kvPath = `${this.game.sc.assetBase}ending/kv.png`;
                     domKv.style.backgroundImage = `url('${kvPath}')`;
-                    domKv.style.display = 'flex'; // 中央配置レイアウトを起動
-                    
+                    domKv.style.display = 'flex';
                     setTimeout(() => { domKv.style.opacity = '1'; }, 50);
                 }
 
-                // 🚀 3. 【修正】HTML側の自機に、動的に正しいアセットパスをセットする！
                 if (warpPlayer) {
-                    // システムのassetBaseをベースに、自機の画像パスを組み立て
-                    const playerImgPath = `${this.game.sc.assetBase}player.webp`; // もし階層が違う場合は調整してください
+                    const playerImgPath = `${this.game.sc.assetBase}player.webp`;
                     warpPlayer.src = playerImgPath;
-
                     warpPlayer.classList.add('trigger-warp');
                 }
             }
 
             this._endingTimer++;
 
-            // ■ PHASE 1: 自機が下からシュッと入ってくる（1秒間＝60F）
-            if (this._endingPhase === 1) {
-                if (this._endingTimer >= 60) {
-                    this._endingPhase = 2;
-                }
+            if (this._endingPhase === 1 && this._endingTimer >= 60) {
+                this._endingPhase = 2;
             }
-
-            // ■ PHASE 2: 静寂と余韻。Imagen 3とクリアの文字をじっくり魅せる（4.5秒間＝270F）
-            if (this._endingPhase === 2) {
-                if (this._endingTimer >= 330) { // 60 + 270
-                    this._endingPhase = 3;
-                }
+            if (this._endingPhase === 2 && this._endingTimer >= 330) {
+                this._endingPhase = 3;
             }
-
-            // ■ PHASE 3: 自機が音速を超えて上部へワープ（0.5秒間＝30F。CSSの5.5s発火と完全同期）
-            if (this._endingPhase === 3) {
-                if (this._endingTimer >= 360) { // 330 + 30
-                    this._endingPhase = 4;
-                    this._endingTimer = 0; 
-                }
+            if (this._endingPhase === 3 && this._endingTimer >= 360) {
+                this._endingPhase = 4;
+                this._endingTimer = 0; 
             }
-
-            // ■ PHASE 4: 自機が去ったあとの「3秒間（180F）」の静かなる宇宙の余韻
             if (this._endingPhase === 4) {
-                // ⏳ 【変更】1秒（60F）経ったら、じわ〜っとフェードアウトを開始！
-                //（CSSの transition: opacity 1.0s によって、120Fの時点で完全に真っ黒になります）
-                if (this._endingTimer === 60) {
-                    if (domKv) domKv.style.opacity = '0';
+                if (this._endingTimer === 60 && domKv) {
+                    domKv.style.opacity = '0';
                 }
 
-                // ⏳ 3秒（180F）経ったら次の画面へ。
-                //（120Fで消えきっているので、120F〜180Fの「丸々1秒間」が完全な黒画面の余韻になります）
                 if (this._endingTimer >= 180) {
                     this._endingPhase = 5; 
-                    
-                    // 次のプレイのために内部状態を完全リセット
                     this.resetGameUIState();
-                    
-                    // ゲーム容器をクレジット表示のために確実に復活させる
                     if (container) container.style.display = 'block';
-                    
-                    console.log("[Ending] Full HTML-Ending completed. Dark room luxury finished. To Credits.");
-                    
-                    // 次の画面へセッション終了を通知
+                    console.log("[Ending] Full HTML-Ending completed. To Credits.");
                     this.game.endSession("ALL STAGES CLEARED!");
                 }
             }
 
-            return; // 🛑 Canvas側の描画処理は1文字たりとも通さない
+            return;
         }
 
         // ---------------------------------------------------------------
-        // 🌌 2. 通常の道中開始時：KV演出
+        // 💀 【最優先2】ゲームオーバー演出：KV描画を即時強制停止
+        // ---------------------------------------------------------------
+        if (!this.game.player.alive && this.game.currentLives <= 0) {
+            this.isKvActive = false;
+
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(0, this.game.height / 2 - 50, this.game.width, 100);
+            ctx.fillStyle = '#FFF';
+            ctx.fillText('GAME OVER', this.game.width / 2, this.game.height / 2);
+            ctx.restore();
+            return;
+        }
+
+        // ---------------------------------------------------------------
+        // 🌌 通常の道中開始時：KV演出
         // ---------------------------------------------------------------
         let kvPath = null;
         let kvDuration = 180;
@@ -257,26 +251,46 @@ export class GameUIManager {
             }
         }
 
-        if (this.game.frame > 0 && this.game.frame < kvDuration) {
-            let textAlpha = 1.0;
-            if (this.game.frame <= 30) textAlpha = this.game.frame / 30;
-            else if (this.game.frame > (kvDuration - 30)) textAlpha = (kvDuration - this.game.frame) / 30;
+        // kvDuration 未満かつ未開始（!this._kvShown）ならKVを自動有効化
+        if (kvPath && this.game.frame < kvDuration && !this._kvShown) {
+            this.isKvActive = true;
+            this._kvShown = true;
+        }
+
+        // KV有効期間中かつ isKvActive が true の場合のみ描画
+        if (this.game.frame >= 0 && this.game.frame < kvDuration && this.isKvActive) {
+            let textAlpha = 0;
+            if (this.game.frame <= 30) {
+                textAlpha = Math.min(1.0, Math.max(0, this.game.frame / 30));
+            } else if (this.game.frame > (kvDuration - 30)) {
+                textAlpha = Math.min(1.0, Math.max(0, (kvDuration - this.game.frame) / 30));
+            } else {
+                textAlpha = 1.0;
+            }
 
             if (kvPath && this.game.assets) {
                 const kvImage = this.game.assets.get?.(kvPath) || this.game.assets[kvPath];
 
-                // 💡 修正ポイント: 画像が存在し、読み込みが完了しており、かつ src に現在の kvPath が含まれているか検証
+                const rawSrc = kvImage?.src ? decodeURIComponent(kvImage.src) : '';
+                const targetPath = decodeURIComponent(kvPath);
+                
                 const isCorrectImageLoaded = kvImage && 
                     kvImage.complete && 
                     kvImage.naturalWidth !== 0 && 
-                    kvImage.src.includes(encodeURI(kvPath));
+                    rawSrc.endsWith(targetPath);
 
                 if (isCorrectImageLoaded) {
                     ctx.save();
                     const progress = this.game.frame / kvDuration;
-                    let kvAlpha = 1.0;
-                    if (this.game.frame <= 25) kvAlpha = this.game.frame / 25;
-                    else if (this.game.frame > (kvDuration - 45)) kvAlpha = Math.max(0, (kvDuration - this.game.frame) / 45);
+                    
+                    let kvAlpha = 0;
+                    if (this.game.frame <= 25) {
+                        kvAlpha = Math.min(1.0, Math.max(0, this.game.frame / 25));
+                    } else if (this.game.frame > (kvDuration - 45)) {
+                        kvAlpha = Math.min(1.0, Math.max(0, (kvDuration - this.game.frame) / 45));
+                    } else {
+                        kvAlpha = 1.0;
+                    }
 
                     const baseWidth = this.game.width;
                     const baseHeight = kvImage.height * (this.game.width / kvImage.width);
@@ -286,6 +300,7 @@ export class GameUIManager {
                     const drawX = (this.game.width - drawWidth) / 2;
                     const drawY = (this.game.height * 0.35) - (drawHeight / 2);
 
+                    // 黒背景のオーバーレイ
                     ctx.save();
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.globalAlpha = kvAlpha * 0.6;
@@ -293,33 +308,32 @@ export class GameUIManager {
                     ctx.fillRect(0, 0, this.game.width, this.game.height);
                     ctx.restore();
 
+                    // KV本体の描画
                     ctx.globalCompositeOperation = 'screen';
-                    ctx.globalAlpha = Math.max(0, kvAlpha);
+                    ctx.globalAlpha = kvAlpha;
                     ctx.drawImage(kvImage, drawX, drawY, drawWidth, drawHeight);
                     ctx.restore();
                 }
             }
 
-            // ステージ名テキストの描画（画像ロード前でも文字は正しくフェードイン表示される）
+            // ステージ名テキストの描画
             const textCenterY = this.game.height * 0.65;
             ctx.font = '16px "Press Start 2P", cursive';
-            ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha})`;
+            ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha.toFixed(2)})`;
             ctx.fillText(`STAGE ${this.game.currentStageNum}`, this.game.width / 2, textCenterY);
             
             ctx.font = '11px "Press Start 2P", cursive';
-            ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha})`;
-            ctx.fillText(this.game.scenario.stageName, this.game.width / 2, textCenterY + 30);
+            ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha.toFixed(2)})`;
+            ctx.fillText(this.game.scenario.stageName || '', this.game.width / 2, textCenterY + 30);
+
+        } else if (this.game.frame >= kvDuration && this.isKvActive) {
+            // フェードアウト完了時に描画フラグを倒す
+            this.isKvActive = false;
         }
 
-        // 💀 3. ゲームオーバー演出 (通常時のみ)
-        if (!this.game.player.alive && this.game.currentLives <= 0) {
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.fillRect(0, this.game.height / 2 - 50, this.game.width, 100);
-            ctx.fillStyle = '#FFF';
-            ctx.fillText('GAME OVER', this.game.width / 2, this.game.height / 2);
-        }
-
-        // 🌟 4. 通常のステージクリア演出 (STAGE 1〜6用)
+        // ---------------------------------------------------------------
+        // 🌟 通常のステージクリア演出 (STAGE 1〜6用)
+        // ---------------------------------------------------------------
         if (this.game.isCleared) {
             const stageNameStr = this.game.scenario.stageName; 
             ctx.fillStyle = '#0FF';

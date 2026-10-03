@@ -226,7 +226,7 @@ export class Player extends Entity {
         this.y = Math.max(minY, Math.min(maxY, this.y));
     }
 
-    /** 武器換装ロジック（Xキー / マウス右クリック）*/
+    /** 武器換装ロジック（Xキー / マウス右クリック / ダブルタップ）*/
     _handleWeaponSwitch(input) {
         if (!this.game.isRunning || !this.alive) return;
 
@@ -236,8 +236,11 @@ export class Player extends Entity {
         // 右クリック判定（クリックされた瞬間に 1 度だけ true になる）
         const isRightClicked = input.getAndResetRightClick(); 
 
-        // Xキーの長押し防止判定 OR 右クリック単発トリガー
-        if ((isKeyboardDown && this.weaponSwitchReady) || isRightClicked) {
+        // ダブルタップ判定（タップされた瞬間に 1 度だけ true になる）
+        const isDoubleTapped = input.getAndResetDoubleTap();
+
+        // Xキーの長押し防止判定 OR 右クリック単発トリガー OR ダブルタップ単発トリガー
+        if ((isKeyboardDown && this.weaponSwitchReady) || isRightClicked || isDoubleTapped) {
             this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
             this.game.weaponMode = this.weaponMode; 
             

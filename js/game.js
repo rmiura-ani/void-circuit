@@ -165,7 +165,6 @@ export class Game {
 
     /** ゲーム開始 */
     async start(initialInputMode, startStage = 1) {
-        this.ui.resetGameUIState();
                 
         this.reset();
         this._attachEventListeners();
@@ -183,6 +182,9 @@ export class Game {
 
     /** ステージ情報を動的にセットアップ */
     async initStage(stageNum) {
+        // UIリセット
+        this.ui.resetGameUIState();
+
         this.currentStageNum = stageNum;
         this.isBossActive = false;
         this.bossStartTime = 0;

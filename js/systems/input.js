@@ -23,7 +23,15 @@ export class InputManager {
         this.isTouching = false;
         this.isRightMouseDown = false;     // 右クリック長押し判定用
         this.rightClickTriggered = false;  // 右クリック単発トリガー用
+        this.doubleTapTriggered = false;   // ダブルタップ単発トリガー用
         this.isCanvasOutClicked = false;
+
+        // ダブルタップ判定用の設定値
+        this.lastTapTime = 0;
+        this.lastTapX = 0;
+        this.lastTapY = 0;
+        this.doubleTapDelay = 300;       // タップとタップの間隔（ミリ秒）
+        this.doubleTapMaxDistance = 40;  // 許容する最大距離（論理ピクセル）
 
         this._abortController = new AbortController();
         this._setupEventListeners();
@@ -89,6 +97,32 @@ export class InputManager {
             this.canvas.addEventListener('touchstart', (e) => {
                 this.isTouching = true;
                 updatePos(e);
+
+                // --- ダブルタップ判定 (時間 ＆ 距離チェック) ---
+                const now = Date.now();
+                const timeDiff = now - this.lastTapTime;
+
+                if (timeDiff < this.doubleTapDelay && this.touchX !== null && this.touchY !== null) {
+                    // 1回目と2回目のタップ位置の距離（ピクセル）を計算
+                    const dx = this.touchX - this.lastTapX;
+                    const dy = this.touchY - this.lastTapY;
+                    const dist = Math.hypot(dx, dy); // Math.sqrt(dx * dx + dy * dy)
+
+                    if (dist <= this.doubleTapMaxDistance) {
+                        this.doubleTapTriggered = true;
+                        this.lastTapTime = 0; // 連続判定防止のリセット
+                    } else {
+                        // 距離が離れすぎている場合は新しい1回目のタップとして記録
+                        this.lastTapTime = now;
+                        this.lastTapX = this.touchX;
+                        this.lastTapY = this.touchY;
+                    }
+                } else {
+                    this.lastTapTime = now;
+                    this.lastTapX = this.touchX;
+                    this.lastTapY = this.touchY;
+                }
+
                 if (e.cancelable) e.preventDefault();
             }, touchOptions);
 
@@ -122,6 +156,16 @@ export class InputManager {
         return triggered;
     }
 
+    /**
+     * ダブルタップが行われたかを判定し、判定後にフラグをリセットします（単発トリガー用）
+     * @returns {boolean}
+     */
+    getAndResetDoubleTap() {
+        const triggered = this.doubleTapTriggered;
+        this.doubleTapTriggered = false;
+        return triggered;
+    }
+
     _handleCoordinate(e) {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
@@ -147,5 +191,6 @@ export class InputManager {
         this.isTouching = false;
         this.isRightMouseDown = false;
         this.rightClickTriggered = false;
+        this.doubleTapTriggered = false;
     }
-}
+}   
