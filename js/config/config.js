@@ -25,7 +25,12 @@ export class ConfigManager {
         this.OPTIONS = {
             difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
             lives: [1, 2, 3, 5],
-            extend: [3000000, 5000000, 10000000, 'NONE']
+            extend: [
+                [150000, 500000], 
+                [250000, 700000], 
+                [350000], 
+                'NONE'
+            ]
         };
 
         this.difficulty = this.OPTIONS.difficulty[1];
@@ -170,6 +175,7 @@ export class ConfigManager {
         } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
             this.soundTest.changeEQGain(setting, isRight);
         }
+
         this.refreshDisplay(item);
     }
 
@@ -233,7 +239,22 @@ export class ConfigManager {
         };
 
         if (this.OPTIONS[setting]) {
-            valEl.innerHTML = wrapArrows(this[setting]);
+            let displayVal = this[setting];
+
+            // 💡 extend の表示整形
+            if (setting === 'extend' && Array.isArray(displayVal)) {
+                if (displayVal.length === 1) {
+                    // 1回限定の場合（例: [250000] -> "25万 (1回)"）
+                    const first = (displayVal[0] / 10000).toFixed(0) + '万';
+                    displayVal = `${first} (1回)`;
+                } else if (displayVal.length >= 2) {
+                    // 2回限定の場合（例: [150000, 400000] -> "15万 / 40万"）
+                    const first = (displayVal[0] / 10000).toFixed(0) + '万';
+                    const second = (displayVal[1] / 10000).toFixed(0) + '万';
+                    displayVal = `${first} / ${second}`;
+                }
+            }
+            valEl.innerHTML = wrapArrows(displayVal);
         } else if (setting === 'se_vol') {
             const vol = audio ? Math.round((audio.seVolume ?? 0.8) * 100) : 80;
             const txt = vol === 0 ? "MUTED" : (vol === 100 ? "MAX" : `${vol}%`);

@@ -28,8 +28,20 @@ export class GameUIManager {
         this.resetGameUIState();
     }
 
+    /** 💡 メインループから毎フレーム呼ばれるUI一括更新メソッド */
+    update() {
+        this.updateScoreUI();
+        this.updateLivesUI();
+    }
+
     // 🚀 UI・KV・演出状態をリセットする
     resetGameUIState() {
+        this.hasPlayedCounterStopSE = false; // SE既生フラグ
+        this.resetStageUIState(); // 💡 this. を追加（修正箇所）
+    }
+
+    // 🚀 UI・KV・演出状態をリセットする
+    resetStageUIState() {
         // --- A. DOM要素のトグル ---
         if (this.dom.startScreen) this.dom.startScreen.style.display = 'none';
         if (this.dom.livesDisplay) this.dom.livesDisplay.style.display = 'block';
@@ -74,52 +86,89 @@ export class GameUIManager {
     }
 
     updateScoreUI() {
-        const MAX_DISPLAY_SCORE = 99999990;
+        const DIGITS = 7;
+        const MAX_DISPLAY_SCORE = 9999990; // 7桁表示の限界値
 
         if (this.dom.scoreDisplay) {
+            // 表示用スコア（内部スコアがどれだけ大きくても 9,999,990 で打ち止め）
             const displayScore = Math.min(this.game.score, MAX_DISPLAY_SCORE);
-            this.dom.scoreDisplay.innerText = `SCORE: ${displayScore.toString().padStart(8, '0')}`;
-            
-            if (this.game.score >= MAX_DISPLAY_SCORE && !this.game.hasCounterStopped) {
-                this.dom.scoreDisplay.classList.add('counter-stop');
+            const isCounterStopped = (this.game.score >= MAX_DISPLAY_SCORE);
+
+            this.dom.scoreDisplay.innerText = `SCORE: ${displayScore.toString().padStart(DIGITS, '0')}`;
+            this.dom.scoreDisplay.classList.toggle('counter-stop', isCounterStopped);
+
+            // カンスト達成の「瞬間」だけ効果音を鳴らす（演出用フラグ）
+            if (isCounterStopped && !this.hasPlayedCounterStopSE) {
                 if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
-                this.game.hasCounterStopped = true;
+                this.hasPlayedCounterStopSE = true; // SE既生フラグ（UI側のローカル管理）
             }
         }
 
         if (this.dom.hiScoreDisplay) {
-            const currentHi = this.game.sc.highScore; 
+            const currentHi = this.game.sc.highScore || 0;
             const displayHiScore = Math.min(currentHi, MAX_DISPLAY_SCORE);
-            
-            this.dom.hiScoreDisplay.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(8, '0')}`;
-            
-            if (currentHi >= MAX_DISPLAY_SCORE) {
-                this.dom.hiScoreDisplay.classList.add('counter-stop');
-            }
-        }
-        
-        if (!this.game.hasExtended && this.game.extendThreshold !== 'NONE' && this.game.score >= this.game.extendThreshold) {
-            this.game.currentLives++;
-            if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
-            this.game.hasExtended = true;
-            this.triggerExtendBlink();
+
+            this.dom.hiScoreDisplay.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(DIGITS, '0')}`;
+            this.dom.hiScoreDisplay.classList.toggle('counter-stop', currentHi >= MAX_DISPLAY_SCORE);
         }
     }
 
-    triggerExtendBlink() {
-        const el = this.dom.livesDisplay;
-        el?.classList.add('extend-blink');
-        setTimeout(() => el?.classList.remove('extend-blink'), 2000);
+triggerExtendBlink() {
+        // 1. SE再生
+        if (this.game.sc?.audio) {
+            this.game.sc.audio.playPowerUp();
+        }
+
+        // 2. 新規増加フラグを立てて表示更新
+        this.isExtending = true;
+        this.updateLivesUI();
+
+        // 3. 2秒後にフラグを解除して通常表示に戻す
+        if (this._blinkTimer) clearTimeout(this._blinkTimer);
+        this._blinkTimer = setTimeout(() => {
+            this.isExtending = false;
+            this.updateLivesUI(); // 点滅終わりの通常表示に戻す
+            this._blinkTimer = null;
+        }, 2000);
     }
 
     updateLivesUI() {
         const el = this.dom.livesDisplay;
         if (!el) return;
-        const count = Math.max(0, this.game.currentLives - 1);
-        const icon = "🚀";
-        el.innerText = count === 0 ? "" : (count <= 3 ? icon.repeat(count) : `${icon}x${count}`);
-    }
 
+        const count = Math.max(0, this.game.lives - 1);
+        const icon = "🚀";
+
+        if (count === 0) {
+            el.innerHTML = "";
+            return;
+        }
+
+        let html = "";
+
+        if (count <= 3) {
+            if (this.isExtending) {
+                // 例: 3機目の場合、既存2個 ＋ 点滅する1個
+                const baseIcons = icon.repeat(count - 1);
+                html = `${baseIcons}<span class="extend-blink-single">${icon}</span>`;
+            } else {
+                html = icon.repeat(count);
+            }
+        } else {
+            // 4機以上（x4など数値表記）の場合
+            if (this.isExtending) {
+                html = `${icon}x<span class="extend-blink-single">${count}</span>`;
+            } else {
+                html = `${icon}x${count}`;
+            }
+        }
+
+        // HTML内容が変わった時だけ書き換え（余計な再描画を防ぐ）
+        if (el.innerHTML !== html) {
+            el.innerHTML = html;
+        }
+    }
+    
     visualEffectWarning() {
         const container = this.dom.gameContainer;
         if (!container) return;
@@ -146,7 +195,7 @@ export class GameUIManager {
         if (boss && this.game.bossStartTime > 0 && bonusEl) {
             const elapsed = this.game.frame - this.game.bossStartTime;
             const remaining = Math.max(0, boss.timeLimit - elapsed);
-            bonusEl.innerText = `${remaining}F (${(remaining / this.game.fps).toFixed(2)}s)`;
+            bonusEl.innerText = `${remaining}F (${(remaining / GAME_CONFIG?.FPS || 60).toFixed(2)}s)`;
             bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
         } else if (bonusEl) {
             bonusEl.innerText = "---";
@@ -226,7 +275,8 @@ export class GameUIManager {
         // ---------------------------------------------------------------
         // 💀 【最優先2】ゲームオーバー演出：KV描画を即時強制停止
         // ---------------------------------------------------------------
-        if (!this.game.player.alive && this.game.currentLives <= 0) {
+        // 💡 this.game.currentLives -> this.game.lives に修正
+        if (!this.game.player.alive && this.game.lives <= 0) {
             this.isKvActive = false;
 
             ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';

@@ -234,7 +234,7 @@ export class SystemController {
     showStartScreen(msg, isNew) {
         if (!this.game) return;
 
-        const missionCode = this.getMissionCode(false);
+        const missionCode = this.getMissionCode();
         const spawned = this.game.stats?.enemiesSpawned || 0;
         const killed = this.game.stats?.enemiesKilled || 0;
         const fired = this.game.stats?.shotsFired || 0;
@@ -280,11 +280,15 @@ export class SystemController {
     setupShareButton() {
         const btn = document.getElementById('share-btn');
         if (!btn) return;
-        btn.style.display = 'block';
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(this.generateShareText())}`, '_blank');
-        };
+        if (this.game.missionConfig.cheatUsed){
+            btn.style.display = 'none';
+        }else{
+            btn.style.display = 'block';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(this.generateShareText())}`, '_blank');
+            };
+        }
     }
 
     generateShareText() {
@@ -292,24 +296,23 @@ export class SystemController {
         return `PROJECT: VOID-CIRCUIT v${this.VERSION}\n` +
                `----------------------------\n` +
                `■ SCORE  : ${scoreVal.toLocaleString()}\n` +
-               `■ MISSION: ${this.getMissionCode(true)}\n` +
+               `■ MISSION: ${this.getMissionCode()}\n` +
                `----------------------------\n` +
                `作戦完了。虚無の回路を突破せよ。\n\n` +
                `https://void-circuit.ani-net.com\n` +
                `#VoidCircuit #80年代STG #IndieGame`;
     }
 
-    /** ミッション名導出（未定義エラーへのセーフティ強化） */ 
-    getMissionCode(isShare = false) {
+    /** ミッション名導出 */ 
+    getMissionCode() {
         const c = this.game?.missionConfig;
         const s = this.game?.stats;
 
         if (!c || !s) return "UNKNOWN-MISSION";
 
-        const diffMap = { 'EASY':'EZ', 'NORMAL':'NM', 'HARD':'HD', 'VERY HARD':'VH' };
+        const diffMap = { 'EASY':'EZ', 'NORMAL':'N', 'HARD':'H', 'H':'VH' };
         const diffStr = diffMap[c.difficulty] || 'U';
-        const cheatStr = c.cheatUsed ? (isShare ? '(CHEAT)' : '(CHT)') : '';
-        const extendStr = c.extend === 'NONE' ? 'OFF' : `${(c.extend / 1000000)}M`;
+//        const extendStr = c.extend === 'NONE' ? 'OFF' : `${(c.extend / 1000000)}M`;
         const livesStr = `${c.lives}L`;
         const missionName = (c.missionName || 'UNKNOWN').toUpperCase();
 
@@ -318,7 +321,7 @@ export class SystemController {
         if (s.inputMode === 'MOUSE') controlSuffix = '-M';
         if (s.inputMode === 'KEYBOARD') controlSuffix = '-K';
 
-        return `${missionName}-${diffStr}${cheatStr}-${livesStr}-${extendStr}${controlSuffix}`;
+        return `${missionName}-${diffStr}-${livesStr}${controlSuffix}`;
     }
 
     /** システム破棄処理 */

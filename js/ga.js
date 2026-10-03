@@ -49,9 +49,9 @@ const Analytics = {
         this._send('level_start', {
             level_name: missionConfig.missionName,
             difficulty: missionConfig.difficulty,
-            cheat_enabled: missionConfig.cheatUsed, // ※end側は cheat_used
             extend_setting: missionConfig.extend,
             initial_lives: missionConfig.lives,
+            cheat_enabled: missionConfig.cheatUsed,
         });
     },
 

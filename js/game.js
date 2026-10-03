@@ -12,7 +12,7 @@ import { ScenarioManager } from './systems/scenario.js';
 import { AssetManager } from './entities/base.js';
 import { GameUIManager } from './game-ui.js';
 import { GameCollisionManager } from './game-collision.js';
-import { BackgroundManager } from './background.js'; // ★ 不足していたインポートを追加
+import { BackgroundManager } from './background.js';
 
 import './entities/enemies/index.js'; // 全ステージの敵がレジストリに登録される
 
@@ -33,22 +33,22 @@ const GAME_CONFIG = {
         'EASY': { 
             fireRate: 0.7, 
             bulletSpeed: 0.75, 
-            wayBonus: -1 // 例: 3WAY -> 2WAY（弾幕の隙間が広がり避けやすい）
+            wayBonus: -1 
         },
         'NORMAL': { 
             fireRate: 1.0, 
             bulletSpeed: 0.9,  
-            wayBonus: 0  // 基本の弾幕パターン通り
+            wayBonus: 0  
         },
         'HARD': { 
             fireRate: 1.3, 
             bulletSpeed: 1.0,  
-            wayBonus: 1  // 例: 3WAY -> 4WAY（弾幕密度アップ）
+            wayBonus: 1  
         },
         'VERY HARD': { 
             fireRate: 1.6, 
             bulletSpeed: 1.1,  
-            wayBonus: 2  // 例: 3WAY -> 5WAY（超高密度・高スピード）
+            wayBonus: 2  
         }
     }
 };
@@ -79,7 +79,7 @@ export class Game {
 
         // 内部状態
         this._score = 0;
-        this._lives = controller.config.lives;
+        this.lives = controller.config.lives;
         this.isRunning = false;
 
         this._abortController = null;
@@ -90,29 +90,29 @@ export class Game {
     // --- Getter / Setter ---
 
     get score() { return this._score; }
-    set score(val) {
-        this._score = val;
-        this.ui.updateScoreUI();
+    set score(value) {
+        const delta = value - this._score;
+        this._score = value;
+
+        // 加算（正の増加）があった場合のみエクステンド判定を行う
+        if (delta > 0) {
+            this.checkExtend();
+        }
     }
 
-    get currentLives() { return this._lives; }
-    set currentLives(val) {
-        this._lives = val;
-        this.ui.updateLivesUI();
-    }
 
     // --- パブリックメソッド（ゲームフロー制御） ---
 
     /** 初期化 */
     reset() {
         this._score = 0;
-        this.currentLives = this.sc.config.lives;
+        this.lives = this.sc.config.lives;
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0, inputMode: "NONE" };
         this.isInvincibleCheat = this.sc.config.isInvincibleCheat;
 
         this.extendThreshold = this.sc.config.extend; 
-        this.hasExtended = false;
-        this.hasCounterStopped = false;
+        this.extendIndex = 0;
+        this.hasExtended = false; // 単一値指定用フラグのリセット
 
         this.missionConfig = {
             missionName: this.sc.tag,
@@ -183,7 +183,7 @@ export class Game {
     /** ステージ情報を動的にセットアップ */
     async initStage(stageNum) {
         // UIリセット
-        this.ui.resetGameUIState();
+        this.ui.resetStageUIState();
 
         this.currentStageNum = stageNum;
         this.isBossActive = false;
@@ -203,9 +203,6 @@ export class Game {
                 this.background.setup(this.scenario.bgColor, stageNum); 
                 this.sc.audio?.playBGM();
                 
-                if (this.missionConfig) {
-                    this.missionConfig.missionName = this.sc.tag;
-                }
                 console.log(`Stage ${stageNum} "${this.scenario.stageName}" Started.`);
                 return true;
             } else {
@@ -227,6 +224,7 @@ export class Game {
         if (!this.isRunning) return;
 
         this.frame++;
+
         this.player.update(this.width, this.height);
         this.scenario.update(this);
 
@@ -241,7 +239,7 @@ export class Game {
             }
         }
         
-        if (!this.player.alive && this.currentLives > 0) {
+        if (!this.player.alive && this.lives > 0) {
             this.respawnTimer++;
             if (this.respawnTimer > this.playerSpawnWaitTime) { 
                 this.respawnPlayer();
@@ -249,7 +247,7 @@ export class Game {
             }
         }
 
-        if (!this.player.alive && this.currentLives <= 0) {
+        if (!this.player.alive && this.lives <= 0) {
             this.gameOverTimer++;
             if (this.gameOverTimer > 180) {
                 this.endSession("GAME OVER");
@@ -257,7 +255,12 @@ export class Game {
         }
 
         this.updateEntities();
-        this.ui.updateDebugInfo(); 
+
+        // 💡 全ての計算・状態更新が終わった後にUIとデバッグ表示を更新する
+        if (this.ui) {
+            this.ui.update();           // SCORE・残機などの表示更新
+            this.ui.updateDebugInfo();  // デバッグ情報の更新
+        }
     }
 
     /** エンティティ更新（一括処理） */
@@ -344,8 +347,8 @@ export class Game {
 
         this.player.alive = false;
         this.respawnTimer = 0;      
-        this.currentLives--;
-        if (this.currentLives <= 0) {
+        this.lives--;
+        if (this.lives <= 0) {
             this.sc.audio?.fadeOutBGM();
         }
     }
@@ -356,6 +359,39 @@ export class Game {
         this.player.y = this.height - this.playerSpawnYOffset;
         this.player.alive = true;
         this.player.setInvincible(this.playerSpawnInvincibleTime);
+    }
+
+    /** エクステンド判定 */
+    checkExtend() {
+        if (this.extendThreshold === 'NONE' || !this.extendThreshold) return;
+
+        // 1. 配列指定の場合（例: [250000, 730000] や [350000]）
+        if (Array.isArray(this.extendThreshold)) {
+            const currentIndex = this.extendIndex || 0;
+            
+            // すべてのエクステンドを獲得済みなら終了
+            if (currentIndex >= this.extendThreshold.length) return;
+
+            const nextThreshold = this.extendThreshold[currentIndex];
+
+            if (nextThreshold && this.score >= nextThreshold) {
+                this.lives++; // 💡 this.currentLives から this.lives に修正
+                this.extendIndex = currentIndex + 1;
+                
+                if (this.ui?.triggerExtendBlink) {
+                    this.ui.triggerExtendBlink();
+                }
+            }
+        } 
+        // 2. 単一数値指定の場合（後方互換）
+        else if (!this.hasExtended && this.score >= this.extendThreshold) {
+            this.lives++;
+            this.hasExtended = true;
+            
+            if (this.ui?.triggerExtendBlink) {
+                this.ui.triggerExtendBlink();
+            }
+        }
     }
 
     /** 描画マスタ（1ループで描画レイヤー順に一括処理） */
@@ -404,7 +440,7 @@ export class Game {
 
         this._detachEventListeners();
 
-        this.missionConfig.score = this.score;
+        this.stats.score = this.score;
 
         if (typeof Analytics !== 'undefined') {
             Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
@@ -452,7 +488,7 @@ export class Game {
             this.escCount = 0;
             this.escTimer = null;
             
-            this.currentLives = 0;
+            this.lives = 0;
             this.gameOverTimer = 180;
             if (this.player.alive) this.onPlayerMiss(); 
             this.sc.audio?.fadeOutBGM(1000);

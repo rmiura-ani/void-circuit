@@ -151,6 +151,11 @@ canvas {
     pointer-events: none;
 }
 
+#lives-display span.extend-blink-single {
+    display: inline-block;
+    animation: extend-single-effect 0.4s ease-in-out 5;
+}
+
 /* 武器情報全体のコンテナ */
 #weapon-container {
     display: flex;
@@ -630,11 +635,16 @@ canvas {
 }
 
 /* 残機アップ時の一瞬の点滅 */
-@keyframes extend-blink-effect {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+@keyframes extend-single-effect {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.2;
+        transform: scale(1.3); /* 💡 少し拡大させると「ポンッ」と増えた感が出てよりポップになります！ */
+    }
 }
-
 /* 武器ヒント用のゆるやかな点滅 */
 @keyframes weapon-blink {
     0%, 100% { opacity: 1; }
