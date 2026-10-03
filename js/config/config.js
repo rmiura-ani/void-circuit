@@ -90,6 +90,13 @@ export class ConfigManager {
             eqContainer.style.opacity = '0';
             eqContainer.style.display = 'none';
         }
+
+        // 画面外クリックが残るのでリセット
+        if (this.sc && this.sc.input) {
+            this.sc.input.getAndResetCanvasOutClick();
+            this.sc.input.getAndResetRightClick();
+            this.sc.input.getAndResetDoubleTap();
+        }
     }
 
     /** キー入力処理 */

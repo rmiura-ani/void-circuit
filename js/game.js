@@ -161,23 +161,26 @@ export class Game {
 
         window.addEventListener('keydown', (e) => this.handleKeyDown(e), { signal });
 
-        // --- ブラウザ非アクティブ時の自動ポーズ処理 ---
-        const triggerAutoPause = () => {
-            const isGameOver = (!this.player.alive && this.lives <= 0);
+        if (this.replay.mode === 'RECORD') {
 
-            if (this.isRunning && !isGameOver && !this.isPaused) {
-                this.isPaused = true;
-                this.sc.audio.pauseBGM();
-            }
-        };
+            // --- ブラウザ非アクティブ時の自動ポーズ処理 ---
+            const triggerAutoPause = () => {
+                const isGameOver = (!this.player.alive && this.lives <= 0);
 
-        // タブ切り替え / バックグラウンド化
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) triggerAutoPause();
-        }, { signal });
+                if (this.isRunning && !isGameOver && !this.isPaused) {
+                    this.isPaused = true;
+                    this.sc.audio.pauseBGM();
+                }
+            };
 
-        // ウィンドウのフォーカス外れ
-        window.addEventListener('blur', triggerAutoPause, { signal });
+            // タブ切り替え / バックグラウンド化
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) triggerAutoPause();
+            }, { signal });
+
+            // ウィンドウのフォーカス外れ
+            window.addEventListener('blur', triggerAutoPause, { signal });
+        }
 
         // ポーズ解除：ポーズ中に Canvas をクリック/タップで再開
         const resumeGame = (e) => {
@@ -529,8 +532,9 @@ export class Game {
         this._detachEventListeners();
         this.stats.score = this.score;
 
-        // ★★★ ここからリプレイ保存処理 ★★★
-        if (this.replay && this.replay.mode === 'RECORD') {
+        // ★★★ "GAME OVER" か "ALL STAGES CLEARED!" の時だけリプレイ保存 ★★★
+        const shouldSaveReplay = (msg === 'GAME OVER' || msg === 'ALL STAGES CLEARED!');
+        if (shouldSaveReplay && this.replay && this.replay.mode === 'RECORD') {
             const replayData = this.replay.exportReplay();
 
             if (replayData && replayData.log && replayData.log.length > 0) {
