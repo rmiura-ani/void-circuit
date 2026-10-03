@@ -366,7 +366,23 @@ export class AudioManager {
         this.currentBgm.play().catch(e => console.warn("[Audio] Autoplay blocked or audio not ready", e));
     }
 
+    /** ⏸️ BGMの一時停止（ポーズ用） */
+    pauseBGM() {
+        if (this.currentBgm && !this.currentBgm.paused) {
+            this.currentBgm.pause();
+            console.log(`[Audio] BGM Paused: ${this.currentBgmFileName}`);
+        }
+    }
 
+    /** ▶️ BGMの再開（ポーズ解除用） */
+    resumeBGM() {
+        if (this.currentBgm && this.currentBgm.paused) {
+            this._ensureAudioContext();
+            this.currentBgm.play().catch(e => console.warn("[Audio] Resume BGM failed:", e));
+            console.log(`[Audio] BGM Resumed: ${this.currentBgmFileName}`);
+        }
+    }
+    
     resetBGM() {
         if (this.fadeInterval) {
             clearInterval(this.fadeInterval);

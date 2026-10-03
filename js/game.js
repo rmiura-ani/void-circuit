@@ -141,10 +141,10 @@ export class Game {
         this.player.y = this.height - this.playerSpawnYOffset;
 
         this.scenario.reset();
-        this.sc.audio?.resetBGM();
+        this.sc.audio.resetBGM();
     }
 
-    /** イベントリスナーの安全なアタッチ */
+/** イベントリスナーの安全なアタッチ */
     _attachEventListeners() {
         this._detachEventListeners(); // 二重アタッチ防止
 
@@ -152,7 +152,40 @@ export class Game {
         const { signal } = this._abortController;
 
         window.addEventListener('keydown', (e) => this.handleKeyDown(e), { signal });
-        window.addEventListener('mousedown', (e) => this.handleMouseDown(e), { signal });
+
+        // --- ブラウザ非アクティブ時の自動ポーズ処理 ---
+        const triggerAutoPause = () => {
+            // プレイヤーが生きていなくても、残機が残っている（＝復活待ち・死亡演出中）ならポーズOKにする
+            const isGameOver = (!this.player?.alive && this.lives <= 0);
+
+            if (this.isRunning && !isGameOver && !this.isPaused) {
+                this.isPaused = true;
+                this.sc.audio.pauseBGM?.();
+            }
+        };
+
+        // タブ切り替え / バックグラウンド化
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) triggerAutoPause();
+        }, { signal });
+
+        // ウィンドウのフォーカス外れ（別アプリをクリックなど）
+        window.addEventListener('blur', triggerAutoPause, { signal });
+
+        // ポーズ解除：ポーズ中に Canvas をクリック/タップで再開
+        const resumeGame = (e) => {
+            if (this.isRunning && this.isPaused) {
+                // ポーズ画面解除と同時に自機が動いてしまわないよう伝播を停止
+                e.stopPropagation();
+                this.isPaused = false;
+                this.sc.audio.resumeBGM?.();
+            }
+        };
+
+        if (this.canvas) {
+            this.canvas.addEventListener('mousedown', resumeGame, { signal });
+            this.canvas.addEventListener('touchstart', resumeGame, { signal });
+        }
     }
 
     /** イベントリスナーの解除 */
@@ -201,7 +234,7 @@ export class Game {
                 const diffParam = GAME_CONFIG.DIFFICULTY_PARAMS[this.sc.config.difficulty] || GAME_CONFIG.DIFFICULTY_PARAMS['NORMAL'];
                 this.scenario.setDifficulty(diffParam);
                 this.background.setup(this.scenario.bgColor, stageNum); 
-                this.sc.audio?.playBGM();
+                this.sc.audio.playBGM();
                 
                 console.log(`Stage ${stageNum} "${this.scenario.stageName}" Started.`);
                 return true;
@@ -219,6 +252,9 @@ export class Game {
 
     /** メインループ更新 */
     update() {
+        // ポーズ中は更新処理をスキップ
+        if (this.isPaused) return;
+
         this.background.update(this.frame);
 
         if (!this.isRunning) return;
@@ -302,7 +338,7 @@ export class Game {
             if (isEffectsFinished || isTimeout) {
                 this.isCleared = true;
                 this.clearTimer = 0; 
-                this.sc.audio?.fadeOutBGM(3000); 
+                this.sc.audio.fadeOutBGM(3000); 
                 console.log(`[System] All effects finished at frame ${this.postBossTimer}. Stage Cleared.`);
             }
         }
@@ -333,7 +369,7 @@ export class Game {
     onPlayerMiss() {
         if (!this.player.alive) return;
 
-        this.sc.audio?.playExplosion();
+        this.sc.audio.playExplosion();
         const px = this.player.x + this.player.halfWidth;
         const py = this.player.y + this.player.halfHeight;
         for (let i = 0; i < 30; i++) {
@@ -349,7 +385,7 @@ export class Game {
         this.respawnTimer = 0;      
         this.lives--;
         if (this.lives <= 0) {
-            this.sc.audio?.fadeOutBGM();
+            this.sc.audio.fadeOutBGM();
         }
     }
 
@@ -491,7 +527,7 @@ export class Game {
             this.lives = 0;
             this.gameOverTimer = 180;
             if (this.player.alive) this.onPlayerMiss(); 
-            this.sc.audio?.fadeOutBGM(1000);
+            this.sc.audio.fadeOutBGM(1000);
             this.endSession("EMERGENCY EXIT");
         } else {
             this.escTimer = setTimeout(() => {

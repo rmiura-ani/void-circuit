@@ -53,14 +53,18 @@ export class InputManager {
             }, { signal });
         }
 
-        // 画面外クリック検出
-        window.addEventListener('mousedown', (e) => {
-            if (e.target !== this.canvas) {
+        // --- 画面外クリック / タップ検出（PC・スマホ両対応） ---
+        const handleOutClick = (e) => {
+            const target = e.touches && e.touches.length > 0 ? e.touches[0].target : e.target;
+            if (target !== this.canvas) {
                 const ignoreEl = document.getElementById(this.ignoreElementId);
-                if (ignoreEl?.contains(e.target)) return;
+                if (ignoreEl?.contains(target)) return;
                 this.isCanvasOutClicked = true;
             }
-        }, { signal });
+        };
+
+        window.addEventListener('mousedown', handleOutClick, { signal });
+        window.addEventListener('touchstart', handleOutClick, { signal });
 
         // マウス (canvas内 / window全体)
         if (this.canvas) {

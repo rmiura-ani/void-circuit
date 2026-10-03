@@ -226,26 +226,34 @@ export class Player extends Entity {
         this.y = Math.max(minY, Math.min(maxY, this.y));
     }
 
-    /** 武器換装ロジック（Xキー / マウス右クリック / ダブルタップ）*/
+    /** 武器換装ロジック（Xキー / マウス右クリック / ダブルタップ / 画面外タップ）*/
     _handleWeaponSwitch(input) {
         if (!this.game.isRunning || !this.alive) return;
 
         // キーボード（Xキー）判定
         const isKeyboardDown = input.isPressed('KeyX') || input.isPressed('x') || input.isPressed('X');
         
-        // 右クリック判定（クリックされた瞬間に 1 度だけ true になる）
+        // 右クリック判定
         const isRightClicked = input.getAndResetRightClick(); 
 
-        // ダブルタップ判定（タップされた瞬間に 1 度だけ true になる）
+        // ダブルタップ判定
         const isDoubleTapped = input.getAndResetDoubleTap();
 
-        // Xキーの長押し防止判定 OR 右クリック単発トリガー OR ダブルタップ単発トリガー
-        if ((isKeyboardDown && this.weaponSwitchReady) || isRightClicked || isDoubleTapped) {
+        // 画面外クリック/タップ判定（★ここを追加）
+        const isCanvasOutClicked = input.getAndResetCanvasOutClick();
+
+        // Xキー長押し防止 OR 各種単発トリガー
+        if ((isKeyboardDown && this.weaponSwitchReady) || isRightClicked || isDoubleTapped || isCanvasOutClicked) {
             this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
             this.game.weaponMode = this.weaponMode; 
             
             if (this.game.sc?.audio) this.game.sc.audio.playChangeWp();                 
             
+            // UI描画更新（仕様書に準拠する場合）
+            if (typeof this.updateWeaponUI === 'function') {
+                this.updateWeaponUI();
+            }
+
             // キーボードの長押しによる連続切り替えを防止するためのロック
             this.weaponSwitchReady = false; 
         } else if (!isKeyboardDown) {
@@ -253,7 +261,6 @@ export class Player extends Entity {
             this.weaponSwitchReady = true; 
         }
     }
-
     /** ショット発射ロジック（Zキー / スペース / タッチ入力対応） */
     _handleShooting(input) {
         const isFiring = input.isPressed('KeyZ') || input.isPressed('Space') || input.isTouching;

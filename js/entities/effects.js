@@ -186,7 +186,7 @@ export class WarningEffect extends Entity {
 
         // 初回フレームでサイレンSEを再生
         if (!this.soundPlayed) {
-            game?.audio?.playSiren?.() || game?.sc?.audio?.playSiren?.();
+            game?.audio.playSiren?.() || game?.sc?.audio.playSiren?.();
             this.soundPlayed = true;
         }
 

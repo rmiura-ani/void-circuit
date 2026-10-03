@@ -134,9 +134,8 @@ export class SystemController {
         this._abortController = new AbortController();
         const { signal } = this._abortController;
 
-        document.getElementById('start-screen')?.addEventListener('click', () => this.handleProceed('MOUSE'), { signal });
-        
-        document.getElementById('config-open-btn')?.addEventListener('click', (e) => {
+        document.getElementById('start-screen').addEventListener('click', () => this.handleProceed('MOUSE'), { signal });
+        document.getElementById('config-open-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             this.stopIdleTimer();
             this.config.open();
@@ -235,10 +234,10 @@ export class SystemController {
         if (!this.game) return;
 
         const missionCode = this.getMissionCode();
-        const spawned = this.game.stats?.enemiesSpawned || 0;
-        const killed = this.game.stats?.enemiesKilled || 0;
-        const fired = this.game.stats?.shotsFired || 0;
-        const hit = this.game.stats?.shotsHit || 0;
+        const spawned = this.game.stats.enemiesSpawned;
+        const killed = this.game.stats.enemiesKilled;
+        const fired = this.game.stats.shotsFired;
+        const hit = this.game.stats.shotsHit;
 
         const killRate = spawned > 0 ? Math.floor((killed / spawned) * 100) : 0;
         const accuracy = fired > 0 ? ((hit / fired) * 100).toFixed(3) : "0.000";
