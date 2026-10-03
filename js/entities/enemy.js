@@ -41,7 +41,7 @@ export class Enemy extends Entity {
         this.hasEnteredScreen = false;
 
         // 射撃共通タイマー
-        this.shootTimer = Math.random() * 60;
+        this.shootTimer = game.random.range(0, 60);
         this.baseShootInterval = 120; 
         this.fireRateMultiplier = 1.0;
         this.bulletSpeedMultiplier = 1.0;
@@ -396,11 +396,7 @@ export class Enemy extends Entity {
     }
 
     onDie(game, soundoff = false) {
-        const centerX = this.x + this.width / 2;
-        const centerY = this.y + this.height / 2;
-        if (game?.collisions) {
-            game.collisions.createExplosion(centerX, centerY, this, soundoff);
-        }
+        game.collisions.createExplosion(this.x + this.width / 2, this.y + this.height / 2, this, soundoff);
     }
 
     static create(game, bType, hp, data = {}) {
@@ -438,8 +434,8 @@ export class BossEnemy extends Enemy {
                 const shouldPlaySound = !soundoff && (i === 0 || i === 3 || i === 7);
 
                 game.collisions.createExplosion(
-                    bx + Math.random() * bw, 
-                    by + Math.random() * bh, 
+                    bx + game.random.next() * bw, 
+                    by + game.random.next() * bh, 
                     this,
                     !shouldPlaySound
                 );

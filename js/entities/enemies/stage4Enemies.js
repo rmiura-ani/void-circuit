@@ -111,7 +111,7 @@ export class RelicPrismEnemy extends Enemy {
  */
 export class MirageCrawlerEnemy extends Enemy {
     speedY = 1.0;
-    timer = Math.random() * 100;
+    timer = game.random.range(0, 100);
 
     get imageName() { return "enemy_mirage_crawler.webp"; }
 
@@ -369,7 +369,7 @@ export class WormEnemy extends Enemy {
 
         this.speedY = 1.8;
         this.moveDirectionY = 1;
-        this.timer = Math.random() * 100;
+        this.timer = game.random.range(0, 100);
 
         this.angle = 0;
         this.isSubmerged = false;
@@ -403,12 +403,12 @@ export class WormEnemy extends Enemy {
 
         if (this.y >= lowerThreshold && this.moveDirectionY > 0) {
             this.moveDirectionY = -1;
-            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (Math.random() - 0.5) * 120));
+            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (game.random.next() - 0.5) * 120));
         }
 
         if (this.y <= upperThreshold && this.moveDirectionY < 0) {
             this.moveDirectionY = 1;
-            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (Math.random() - 0.5) * 120));
+            this.baseX = Math.max(80, Math.min(game.width - 80, this.baseX + (game.random.next() - 0.5) * 120));
         }
 
         const prevX = this.x;
@@ -435,7 +435,7 @@ export class WormEnemy extends Enemy {
             this.history.pop();
         }
 
-        if (!this.isSubmerged && Math.random() < 0.025) {
+        if (!this.isSubmerged && game.random.next() < 0.025) {
             this.shoot(game);
         }
     }

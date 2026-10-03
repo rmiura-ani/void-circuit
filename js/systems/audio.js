@@ -370,7 +370,6 @@ export class AudioManager {
     pauseBGM() {
         if (this.currentBgm && !this.currentBgm.paused) {
             this.currentBgm.pause();
-            console.log(`[Audio] BGM Paused: ${this.currentBgmFileName}`);
         }
     }
 
@@ -379,7 +378,6 @@ export class AudioManager {
         if (this.currentBgm && this.currentBgm.paused) {
             this._ensureAudioContext();
             this.currentBgm.play().catch(e => console.warn("[Audio] Resume BGM failed:", e));
-            console.log(`[Audio] BGM Resumed: ${this.currentBgmFileName}`);
         }
     }
     

@@ -284,13 +284,13 @@ export class GaleArtilleryEnemy extends Enemy {
         this.width = 160;
         this.height = (155 / 291) * 160;
         this.baseShootInterval = 45;
-        this.windDirection = Math.random() < 0.5 ? 1 : -1;
+        this.windDirection = game.random.next() < 0.5 ? 1 : -1;
 
         this.windParticles = Array.from({ length: 15 }, () => ({
-            x: Math.random() * (game?.width ?? 640),
-            y: Math.random() * (game?.height ?? 480),
-            length: 20 + Math.random() * 40,
-            speed: 6 + Math.random() * 6
+            x: game.random.range(0, game.width),
+            y: game.random.range(0, game.height),
+            length: game.random.range(20, 60),
+            speed: game.random.range(6, 12)
         }));
     }
 

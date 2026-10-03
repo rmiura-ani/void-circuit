@@ -79,7 +79,6 @@ export class Player extends Entity {
             this.isLoaded = true;
         };
         this.image.src = `${game.sc.assetBase}player.webp`;
-        this.input.getAndResetCanvasOutClick();     // 1回読み捨て
     }
 
     get centerX() { return this.x + this.halfWidth; }
@@ -116,45 +115,71 @@ export class Player extends Entity {
         return false;
     }
 
-    /** プレイヤーの入力と状態に応じて位置・武器・射撃を一括更新する */
-    update(cw, ch) {
+    /** 
+     * プレイヤーの入力と状態に応じて位置・武器・射撃を一括更新する
+     * @param {number} cw - 画面幅
+     * @param {number} ch - 画面高さ
+     * @param {Object} inputState - game.jsから渡される入力状態オブジェクト
+     */
+    update(cw, ch, inputState = {}) {
         if (!this.alive) return;
         if (this._invincibleTimer > 0) this._invincibleTimer--;
-
         if (this.shotCooldown > 0) this.shotCooldown--;
 
-        // 1. キーボード操作による移動
-        if (this.input.isPressed('ArrowUp')) this.y -= this.speed;
-        if (this.input.isPressed('ArrowDown')) this.y += this.speed;
-        if (this.input.isPressed('ArrowLeft')) this.x -= this.speed;
-        if (this.input.isPressed('ArrowRight')) this.x += this.speed;
+        // 🎬 リプレイ再生中かどうかチェック（game.jsのreplayオブジェクトを参照）
+        const isPlayback = this.game.replay && this.game.replay.mode === 'PLAYBACK';
 
-        // 2. タッチ/マウス操作
-        if (this.input.isTouching && this.input.touchX !== null) {
-            // ドラッグ移動（風圧＆吸い込み両方のオフセットを計算）
-            this._handleTouchMove(this.input.touchX, this.input.touchY, cw, ch);
+        if (!isPlayback) {
+            // ==========================================
+            // 【通常プレイ時のみ】移動計算を実行
+            // ==========================================
+
+            // 1. キーボード操作による移動（Direct Input 判定）
+            const rawInput = this.game.sc.input;
+            if (rawInput.isPressed('ArrowUp')) this.y -= this.speed;
+            if (rawInput.isPressed('ArrowDown')) this.y += this.speed;
+            if (rawInput.isPressed('ArrowLeft')) this.x -= this.speed;
+            if (rawInput.isPressed('ArrowRight')) this.x += this.speed;
+
+            // 2. タッチ/マウス操作
+            const isTouching = inputState.isTouching !== undefined ? inputState.isTouching : rawInput.isTouching;
+            const touchX = inputState.touchX !== undefined ? inputState.touchX : rawInput.touchX;
+            const touchY = inputState.touchY !== undefined ? inputState.touchY : rawInput.touchY;
+
+            if (isTouching && touchX !== null) {
+                // ドラッグ移動（風圧＆吸い込み両方のオフセットを計算）
+                this._handleTouchMove(touchX, touchY, cw, ch);
+            } else {
+                // 指/マウスを離したらズレをリセット
+                this.mouseWindOffset = 0;
+                this.mouseSuctionOffsetX = 0;
+                this.mouseSuctionOffsetY = 0;
+
+                // キーボード操作等のために風圧・吸い込みを直接加算
+                this.x += this.windForceX + this.suctionForceX;
+                this.y += this.suctionForceY;
+            }
+
+            // 3. 風圧・吸い込み力を使い切ったのでリセット
+            this.windForceX = 0;
+            this.suctionForceX = 0;
+            this.suctionForceY = 0;
+
+            // 4. 画面外はみ出し防止
+            this._clampPosition(cw, ch);
         } else {
-            // 指/マウスを離したらズレをリセット
+            // リプレイ再生中は座標指定で位置が固定されているため、蓄積オフセット等のみ初期化
             this.mouseWindOffset = 0;
             this.mouseSuctionOffsetX = 0;
             this.mouseSuctionOffsetY = 0;
-
-            // キーボード操作等のために風圧・吸い込みを直接加算
-            this.x += this.windForceX + this.suctionForceX;
-            this.y += this.suctionForceY; // 🌀 縦方向の吸い込みを加算
+            this.windForceX = 0;
+            this.suctionForceX = 0;
+            this.suctionForceY = 0;
         }
 
-        // 3. 風圧・吸い込み力を使い切ったのでリセット
-        this.windForceX = 0;
-        this.suctionForceX = 0;
-        this.suctionForceY = 0;
-
-        // 4. 画面外はみ出し防止
-        this._clampPosition(cw, ch);
-
-        // 5. 武器換装とショット自動生成
-        this._handleWeaponSwitch(this.input);
-        this._handleShooting(this.input);
+        // 5. 武器換装とショット自動生成（通常時・再生時問わず更新）
+        this._handleWeaponSwitch(inputState);
+        this._handleShooting(inputState);
     }
 
     /** タッチ/マウス入力時の慣性＆バウンス付き移動を計算する */
@@ -186,7 +211,7 @@ export class Player extends Entity {
         this.x += vx;
         this.y += vy;
 
-        // 🏀 バウンス計算（既存のまま）
+        // 🏀 バウンス計算
         const bounce = 0.6;
         const minX = -this.halfWidth;
         const maxX = cw - this.halfWidth;
@@ -212,11 +237,9 @@ export class Player extends Entity {
 
     /** 自機位置を画面領域内に強制クランプする（半身はみ出し許容） */
     _clampPosition(cw, ch) {
-        const width = cw || (typeof GAME_CONFIG !== 'undefined' ? game.width : 320);
-        const height = ch || (typeof GAME_CONFIG !== 'undefined' ? game.height : 480);
+        const width = cw || (this.game ? this.game.width : 320);
+        const height = ch || (this.game ? this.game.height : 480);
 
-        // 最小値: -halfWidth (左/上に半身出る)
-        // 最大値: width - halfWidth (右/下に半身出る)
         const minX = -this.halfWidth;
         const maxX = width - this.halfWidth;
         const minY = -this.halfHeight;
@@ -227,43 +250,39 @@ export class Player extends Entity {
     }
 
     /** 武器換装ロジック（Xキー / マウス右クリック / ダブルタップ / 画面外タップ）*/
-    _handleWeaponSwitch(input) {
+    _handleWeaponSwitch(inputState) {
         if (!this.game.isRunning || !this.alive) return;
 
         // キーボード（Xキー）判定
-        const isKeyboardDown = input.isPressed('KeyX') || input.isPressed('x') || input.isPressed('X');
-        
-        // 右クリック判定
-        const isRightClicked = input.getAndResetRightClick(); 
+        const rawInput = this.game.sc.input;
+        const isKeyboardDown = rawInput.isPressed('KeyX') || 
+                               rawInput.isPressed('x') || 
+                               rawInput.isPressed('X');
 
-        // ダブルタップ判定
-        const isDoubleTapped = input.getAndResetDoubleTap();
-
-        // 画面外クリック/タップ判定（★ここを追加）
-        const isCanvasOutClicked = input.getAndResetCanvasOutClick();
+        // 各種ワンショットトリガー（確定された boolean 値を参照）
+        const isRightClicked = !!inputState.isRightClick;
+        const isDoubleTapped = !!inputState.isDoubleTap;
+        const isCanvasOutClicked = !!inputState.isCanvasOutClick;
 
         // Xキー長押し防止 OR 各種単発トリガー
         if ((isKeyboardDown && this.weaponSwitchReady) || isRightClicked || isDoubleTapped || isCanvasOutClicked) {
             this.weaponMode = (this.weaponMode === 'STRAIGHT') ? 'WIDE' : 'STRAIGHT';
-            this.game.weaponMode = this.weaponMode; 
-            
-            if (this.game.sc?.audio) this.game.sc.audio.playChangeWp();                 
-            
-            // UI描画更新（仕様書に準拠する場合）
-            if (typeof this.updateWeaponUI === 'function') {
-                this.updateWeaponUI();
+            this.game.weaponMode = this.weaponMode;
+
+            if (this.game.sc && this.game.sc.audio) {
+                this.game.sc.audio.playChangeWp();
             }
 
-            // キーボードの長押しによる連続切り替えを防止するためのロック
             this.weaponSwitchReady = false; 
         } else if (!isKeyboardDown) {
-            // Xキーが離されたらキーボード用のロックを解除
             this.weaponSwitchReady = true; 
         }
     }
+
     /** ショット発射ロジック（Zキー / スペース / タッチ入力対応） */
-    _handleShooting(input) {
-        const isFiring = input.isPressed('KeyZ') || input.isPressed('Space') || input.isTouching;
+    _handleShooting(inputState) {
+        // inputState.isFiring は game.js 側で Z / Space / タッチ の論理ORで確定済み
+        const isFiring = !!inputState.isFiring;
         
         if (isFiring && this.shotCooldown === 0) {
             const centerX = this.centerX;
@@ -289,7 +308,7 @@ export class Player extends Entity {
             }
 
             // ショットSEの再生
-            if (this.game.sc?.audio) {
+            if (this.game.sc && this.game.sc.audio) {
                 this.game.sc.audio.playShot();
             }
         }

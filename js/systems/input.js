@@ -24,7 +24,7 @@ export class InputManager {
         this.isRightMouseDown = false;     // 右クリック長押し判定用
         this.rightClickTriggered = false;  // 右クリック単発トリガー用
         this.doubleTapTriggered = false;   // ダブルタップ単発トリガー用
-        this.isCanvasOutClicked = false;
+        this.isCanvasOutClicked = false;   // 画面外クリック/タップ判定用
 
         // ダブルタップ判定用の設定値
         this.lastTapTime = 0;
@@ -56,17 +56,23 @@ export class InputManager {
         // --- 画面外クリック / タップ検出（PC・スマホ両対応） ---
         const handleOutClick = (e) => {
             const target = e.touches && e.touches.length > 0 ? e.touches[0].target : e.target;
-            if (target !== this.canvas) {
-                const ignoreEl = document.getElementById(this.ignoreElementId);
-                if (ignoreEl?.contains(target)) return;
-                this.isCanvasOutClicked = true;
+            
+            // ★ Canvas自体のクリック/タップであれば「画面外」とは判定しない
+            if (this.canvas && (target === this.canvas || this.canvas.contains(target))) {
+                return;
             }
+
+            // 指定された除外要素（スタート画面等）内の操作も無視する
+            const ignoreEl = document.getElementById(this.ignoreElementId);
+            if (ignoreEl?.contains(target)) return;
+
+            this.isCanvasOutClicked = true;
         };
 
         window.addEventListener('mousedown', handleOutClick, { signal });
         window.addEventListener('touchstart', handleOutClick, { signal });
 
-        // マウス (canvas内 / window全体)
+        // マウス (canvas内)
         if (this.canvas) {
             this.canvas.addEventListener('mousedown', (e) => {
                 if (e.button === 0) {
@@ -100,6 +106,8 @@ export class InputManager {
 
             this.canvas.addEventListener('touchstart', (e) => {
                 this.isTouching = true;
+                
+                // ① 先に現在のタッチ座標を更新
                 updatePos(e);
 
                 // --- ダブルタップ判定 (時間 ＆ 距離チェック) ---
@@ -107,16 +115,15 @@ export class InputManager {
                 const timeDiff = now - this.lastTapTime;
 
                 if (timeDiff < this.doubleTapDelay && this.touchX !== null && this.touchY !== null) {
-                    // 1回目と2回目のタップ位置の距離（ピクセル）を計算
+                    // ② 1回目と2回目のタップ位置の距離（論理ピクセル）を計算
                     const dx = this.touchX - this.lastTapX;
                     const dy = this.touchY - this.lastTapY;
-                    const dist = Math.hypot(dx, dy); // Math.sqrt(dx * dx + dy * dy)
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist <= this.doubleTapMaxDistance) {
                         this.doubleTapTriggered = true;
                         this.lastTapTime = 0; // 連続判定防止のリセット
                     } else {
-                        // 距離が離れすぎている場合は新しい1回目のタップとして記録
                         this.lastTapTime = now;
                         this.lastTapX = this.touchX;
                         this.lastTapY = this.touchY;
@@ -173,8 +180,8 @@ export class InputManager {
     _handleCoordinate(e) {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
         
         // 論理サイズと実表示サイズの比率を計算
         const scaleX = this.canvas.width / rect.width;
@@ -192,9 +199,12 @@ export class InputManager {
     destroy() {
         this._abortController.abort();
         this.keys.clear();
+        this.touchX = null;
+        this.touchY = null;
         this.isTouching = false;
         this.isRightMouseDown = false;
         this.rightClickTriggered = false;
         this.doubleTapTriggered = false;
+        this.isCanvasOutClicked = false;
     }
-}   
+}

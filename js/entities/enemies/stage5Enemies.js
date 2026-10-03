@@ -107,7 +107,7 @@ export class CellMitosisEnemy extends Enemy {
  */
 export class PulseSporeEnemy extends Enemy {
     speedY = 0.8;
-    timer = Math.random() * 60;
+    timer = game.random.range(0, 60);
     scale = 1.0;
     hasPulsed = false;
 
@@ -243,10 +243,10 @@ export class HeartNucleusEnemy extends Enemy {
         const particleCount = 20;
         for (let i = 0; i < particleCount; i++) {
             this.suctionParticles.push({
-                angle: Math.random() * Math.PI * 2,
-                distance: 30 + Math.random() * 120,
-                speed: 2 + Math.random() * 3,
-                length: 10 + Math.random() * 15
+                angle: game.random.angle(),
+                distance: game.random.range(120, 150),
+                speed: game.random.range(2, 5),
+                length: game.random.range(10, 25),
             });
         }
     }
@@ -302,8 +302,8 @@ export class HeartNucleusEnemy extends Enemy {
             p.distance -= p.speed;
 
             if (p.distance <= 10) {
-                p.distance = 120 + Math.random() * 30;
-                p.angle = Math.random() * Math.PI * 2;
+                p.distance =game.random.range(120, 150);
+                p.angle = game.random.angle();
             }
 
             const startX = centerX + Math.cos(p.angle) * p.distance;

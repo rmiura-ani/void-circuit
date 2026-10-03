@@ -103,10 +103,7 @@ export class GameUIManager {
     }
 
     triggerExtendBlink() {
-        if (this.game.sc?.audio) {
-            this.game.sc.audio.playPowerUp();
-        }
-
+        this.game.sc.audio.playPowerUp();
         this.isExtending = true;
         this.updateLivesUI();
 

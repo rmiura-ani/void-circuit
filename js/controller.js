@@ -10,14 +10,15 @@
 import { InputManager } from './systems/input.js';
 import { AudioManager } from './systems/audio.js';
 import { ConfigManager } from './config/config.js';
-import { Game } from './game.js';
+import { ReplayUIManager } from './systems/replay-ui.js';
+ import { Game } from './game.js';
 
 /**
  * SystemController: ゲーム全体のライフサイクル・システム統合管理
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.68";
+        this.VERSION = "0.69";
         this.canvas = document.getElementById('game-canvas');
 
         // アセット参照パスの判別
@@ -30,7 +31,9 @@ export class SystemController {
         this.audio = new AudioManager(this.assetBase);
         this.config = new ConfigManager(this);
         this.config.loadConfig();
-        
+
+        this.replayUI = new ReplayUIManager(this);
+
         this.game = null; 
         this.isShowingCredits = false;
         this.idleTimeout = null;
@@ -95,6 +98,10 @@ export class SystemController {
             if (configBtn) configBtn.style.display = 'block';
 
             this.setupGlobalEvents();
+
+            // ★ リプレイUIの初期化（ボタン生成など）
+            this.replayUI.setupUI();
+
             this.startIdleTimer();
         } catch (e) {
             console.error("[System] Init Failed:", e);

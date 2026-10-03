@@ -139,7 +139,8 @@ export class WaveSpreaderEnemy extends Enemy {
  */
 export class BubbleMineEnemy extends Enemy {
     speedY = 0.8; // 水中に漂うような非常にゆっくりとした降下
-    timer = Math.random() * 100;
+    timer = game.random.range(0, 100)
+
 
     get imageName() { return "enemy_bubble_mine.webp"; }
 
@@ -431,7 +432,7 @@ export class BossEnemy_02 extends BossEnemy {
                     // 完全透明になった後で安全にワープ移動
                     const gameWidth = typeof GAME_CONFIG !== 'undefined' ? GAME_CONFIG.WIDTH : (game?.width || 320);
                     const padding = 50;
-                    this.x = padding + Math.random() * (gameWidth - this.width - padding * 2);
+                    this.x = padding + game.random.next() * (gameWidth - this.width - padding * 2);
                     this.baseX = this.x; // 🎯 移動先を新しい揺れ中心点にする
 
                     // 次のステートへ移動してタイマーリセット
@@ -484,8 +485,8 @@ export class BossEnemy_02 extends BossEnemy {
             setTimeout(() => {
                 if (game?.collisions) {
                     game.collisions.createExplosion(
-                        this.x + Math.random() * this.width, 
-                        this.y + Math.random() * this.height, 
+                        this.x + game.random.range(0, this.width) , 
+                        this.y + game.random.range(0, this.height) ,
                         { maxHp: 80 }
                     );
                 }

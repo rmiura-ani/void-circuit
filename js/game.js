@@ -13,12 +13,16 @@ import { AssetManager } from './entities/base.js';
 import { GameUIManager } from './game-ui.js';
 import { GameCollisionManager } from './game-collision.js';
 import { BackgroundManager } from './background.js';
+import { Random } from './systems/random.js';
+import { ReplayManager } from './systems/replayManager.js';
+import { ReplayStorage } from './systems/replayStorage.js';
+
 
 import './entities/enemies/index.js'; // 全ステージの敵がレジストリに登録される
 
 import { Player, Bullet } from './entities/player.js';
 import { Enemy, EnemyBullet } from './entities/enemy.js';
-import { Particle, ScoreText } from './entities/effects.js';
+import { Particle } from './entities/effects.js';
 
 // 設定・定数の定義
 const GAME_CONFIG = {
@@ -76,6 +80,7 @@ export class Game {
         this.assets = new AssetManager(this.sc.assetBase);
         this.ui = new GameUIManager(this);
         this.collisions = new GameCollisionManager(this);
+        this.replay = new ReplayManager();
 
         // 内部状態
         this._score = 0;
@@ -104,7 +109,10 @@ export class Game {
     // --- パブリックメソッド（ゲームフロー制御） ---
 
     /** 初期化 */
-    reset() {
+    reset(seed = Date.now()) {
+        this.seed = seed;
+        this.random = new Random(this.seed); // 決定論的乱数の初期化
+
         this._score = 0;
         this.lives = this.sc.config.lives;
         this.stats = { enemiesSpawned: 0, enemiesKilled: 0, shotsFired: 0, shotsHit: 0, inputMode: "NONE" };
@@ -144,7 +152,7 @@ export class Game {
         this.sc.audio.resetBGM();
     }
 
-/** イベントリスナーの安全なアタッチ */
+    /** イベントリスナーの安全なアタッチ */
     _attachEventListeners() {
         this._detachEventListeners(); // 二重アタッチ防止
 
@@ -155,12 +163,11 @@ export class Game {
 
         // --- ブラウザ非アクティブ時の自動ポーズ処理 ---
         const triggerAutoPause = () => {
-            // プレイヤーが生きていなくても、残機が残っている（＝復活待ち・死亡演出中）ならポーズOKにする
-            const isGameOver = (!this.player?.alive && this.lives <= 0);
+            const isGameOver = (!this.player.alive && this.lives <= 0);
 
             if (this.isRunning && !isGameOver && !this.isPaused) {
                 this.isPaused = true;
-                this.sc.audio.pauseBGM?.();
+                this.sc.audio.pauseBGM();
             }
         };
 
@@ -169,16 +176,15 @@ export class Game {
             if (document.hidden) triggerAutoPause();
         }, { signal });
 
-        // ウィンドウのフォーカス外れ（別アプリをクリックなど）
+        // ウィンドウのフォーカス外れ
         window.addEventListener('blur', triggerAutoPause, { signal });
 
         // ポーズ解除：ポーズ中に Canvas をクリック/タップで再開
         const resumeGame = (e) => {
             if (this.isRunning && this.isPaused) {
-                // ポーズ画面解除と同時に自機が動いてしまわないよう伝播を停止
                 e.stopPropagation();
                 this.isPaused = false;
-                this.sc.audio.resumeBGM?.();
+                this.sc.audio.resumeBGM();
             }
         };
 
@@ -196,10 +202,10 @@ export class Game {
         }
     }
 
-    /** ゲーム開始 */
-    async start(initialInputMode, startStage = 1) {
-                
-        this.reset();
+    /** 通常ゲーム開始（録画モード） */
+    async start(initialInputMode, startStage = 1, seed = Date.now()) {
+        this.reset(seed);
+        this.replay.startRecording(this.seed);
         this._attachEventListeners();
         
         this.stats.inputMode = initialInputMode;
@@ -213,9 +219,20 @@ export class Game {
         this.isRunning = true;
     }
 
+    /** リプレイ再生開始 */
+    async startReplay(replayData, startStage = 1) {
+        this.reset(replayData.seed);
+        this.replay.startPlayback(replayData);
+        this._attachEventListeners();
+
+        const success = await this.initStage(startStage);
+        if (!success) return;
+
+        this.isRunning = true;
+    }
+
     /** ステージ情報を動的にセットアップ */
     async initStage(stageNum) {
-        // UIリセット
         this.ui.resetStageUIState();
 
         this.currentStageNum = stageNum;
@@ -227,7 +244,6 @@ export class Game {
         this.clearTimer = 0;
 
         try {
-
             const success = await this.scenario.loadStageResources(stageNum, this.assets, this.sc.audio, this.sc.assetBase);
             
             if (success) {
@@ -249,41 +265,93 @@ export class Game {
             return false;
         }
     }
-
-    /** メインループ更新 */
+/** メインループ更新 */
     update() {
-        // ポーズ中は更新処理をスキップ
-        if (this.isPaused) return;
+        if (this.isPaused || !this.isRunning) return;
 
         this.background.update(this.frame);
 
-        if (!this.isRunning) return;
+        const isPlayback = this.replay && this.replay.mode === 'PLAYBACK';
+
+        if (isPlayback) {
+            // --- 1. 再生モード：ログから状態を読み込み ---
+            const frameData = this.replay.getCurrentFrameData();
+
+            if (!frameData && this.replay.log.length > 0) {
+                this.endSession("REPLAY FINISHED");
+                return;
+            }
+
+            if (frameData && this.player) {
+                this.player.x = frameData.x;
+                this.player.y = frameData.y;
+
+                this.currentInputState = {
+                    isFiring: frameData.f === 1,
+                    isRightClick: frameData.b === 1,
+                    isDoubleTap: false,
+                    isCanvasOutClick: false
+                };
+
+                // 再生中もショット・武器切替アニメーション等の更新のために呼ぶ
+                this.player.update(this.width, this.height, this.currentInputState);
+            }
+        } else {
+            // --- 2. 通常プレイ：Input管理クラスから1度だけ取得して確定 ---
+            const isKeyFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space');
+            const isFiring = isKeyFiring || this.sc.input.isTouching;
+
+            const isRightClick = this.sc.input.getAndResetRightClick();
+            const isDoubleTap = this.sc.input.getAndResetDoubleTap();
+            const isCanvasOutClick = typeof this.sc.input.getAndResetCanvasOutClick === 'function' 
+                ? this.sc.input.getAndResetCanvasOutClick() : false;
+
+            this.currentInputState = {
+                isTouching: this.sc.input.isTouching,
+                touchX: this.sc.input.touchX,
+                touchY: this.sc.input.touchY,
+                isFiring: isFiring,
+                isRightClick: isRightClick,
+                isDoubleTap: isDoubleTap,
+                isCanvasOutClick: isCanvasOutClick
+            };
+
+            if (this.player) {
+                // 自機の移動＆武器切替（判定済みデータを与えるだけ）
+                this.player.update(this.width, this.height, this.currentInputState);
+
+                // 録画ログ出力（右クリック・ダブルタップ・画面外タップのいずれが発生したかを記録）
+                if (this.replay && this.replay.mode === 'RECORD') {
+                    const isWeaponSwitchTriggered = isRightClick || isDoubleTap || isCanvasOutClick;
+                    this.replay.recordFrame(this.player.x, this.player.y, isFiring, isWeaponSwitchTriggered);
+                }
+            }
+        }
 
         this.frame++;
 
-        this.player.update(this.width, this.height);
+        // シナリオ・判定の進行
         this.scenario.update(this);
 
-        if (this.player.alive) {
-            this.collisions.check(); 
+        if (this.player && this.player.alive) {
+            this.collisions.check();
             this.checkClearCondition();
             this.updateInputMode();
-            
-            const isFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isTouching;
+
             if (this.frame % 5 === 0 && !this.isBossActive) {
-                this.score += isFiring ? 20 : 30;   
+                this.score += this.currentInputState.isFiring ? 20 : 30;
             }
         }
-        
-        if (!this.player.alive && this.lives > 0) {
+
+        if (this.player && !this.player.alive && this.lives > 0) {
             this.respawnTimer++;
-            if (this.respawnTimer > this.playerSpawnWaitTime) { 
+            if (this.respawnTimer > this.playerSpawnWaitTime) {
                 this.respawnPlayer();
                 this.respawnTimer = 0;
             }
         }
 
-        if (!this.player.alive && this.lives <= 0) {
+        if (this.player && !this.player.alive && this.lives <= 0) {
             this.gameOverTimer++;
             if (this.gameOverTimer > 180) {
                 this.endSession("GAME OVER");
@@ -292,10 +360,9 @@ export class Game {
 
         this.updateEntities();
 
-        // 💡 全ての計算・状態更新が終わった後にUIとデバッグ表示を更新する
         if (this.ui) {
-            this.ui.update();           // SCORE・残機などの表示更新
-            this.ui.updateDebugInfo();  // デバッグ情報の更新
+            this.ui.update();
+            this.ui.updateDebugInfo();
         }
     }
 
@@ -401,36 +468,26 @@ export class Game {
     checkExtend() {
         if (this.extendThreshold === 'NONE' || !this.extendThreshold) return;
 
-        // 1. 配列指定の場合（例: [250000, 730000] や [350000]）
         if (Array.isArray(this.extendThreshold)) {
             const currentIndex = this.extendIndex || 0;
-            
-            // すべてのエクステンドを獲得済みなら終了
             if (currentIndex >= this.extendThreshold.length) return;
 
             const nextThreshold = this.extendThreshold[currentIndex];
 
             if (nextThreshold && this.score >= nextThreshold) {
-                this.lives++; // 💡 this.currentLives から this.lives に修正
+                this.lives++;
                 this.extendIndex = currentIndex + 1;
-                
-                if (this.ui?.triggerExtendBlink) {
-                    this.ui.triggerExtendBlink();
-                }
+                this.ui.triggerExtendBlink();
             }
         } 
-        // 2. 単一数値指定の場合（後方互換）
         else if (!this.hasExtended && this.score >= this.extendThreshold) {
             this.lives++;
             this.hasExtended = true;
-            
-            if (this.ui?.triggerExtendBlink) {
-                this.ui.triggerExtendBlink();
-            }
+            this.ui.triggerExtendBlink();
         }
     }
 
-    /** 描画マスタ（1ループで描画レイヤー順に一括処理） */
+    /** 描画マスタ */
     draw() {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
@@ -438,7 +495,6 @@ export class Game {
         
         if (!this.player) return;
 
-        // 描画優先度を分類して1回の走査でバケット分け
         const bullets = [];
         const normalEnemies = [];
         const bossEnemies = [];
@@ -456,16 +512,12 @@ export class Game {
             }
         }
 
-        // 重ね順に従って順次描画
         bullets.forEach(e => e.draw(this.ctx));
         normalEnemies.forEach(e => e.draw(this.ctx, this.isInvincibleCheat));
         bossEnemies.forEach(e => e.draw(this.ctx, this.isInvincibleCheat));
         otherEntities.forEach(e => e.draw(this.ctx));
 
-        // 自機描画
         this.player.draw(this.ctx);
-
-        // UIオーバーレイ
         this.ui.drawOverlayMessages(this.ctx);
     }
 
@@ -475,8 +527,24 @@ export class Game {
         this.isRunning = false;
 
         this._detachEventListeners();
-
         this.stats.score = this.score;
+
+        // ★★★ ここからリプレイ保存処理 ★★★
+        if (this.replay && this.replay.mode === 'RECORD') {
+            const replayData = this.replay.exportReplay();
+
+            if (replayData && replayData.log && replayData.log.length > 0) {
+                const savedId = ReplayStorage.save({
+                    seed: replayData.seed,
+                    log: replayData.log,
+                    score: this.score,
+                    stage: this.currentStageNum
+                });
+                console.log(`[Game] ✅ リプレイを保存しました (ID: ${savedId})`);
+            } else {
+                console.warn(`[Game] ⚠️ リプレイログが空のため保存スキップ`);
+            }
+        }
 
         if (typeof Analytics !== 'undefined') {
             Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);

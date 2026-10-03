@@ -186,7 +186,7 @@ export class WarningEffect extends Entity {
 
         // 初回フレームでサイレンSEを再生
         if (!this.soundPlayed) {
-            game?.audio.playSiren?.() || game?.sc?.audio.playSiren?.();
+            game.sc.audio.playSiren();
             this.soundPlayed = true;
         }
 
@@ -205,8 +205,8 @@ export class WarningEffect extends Entity {
         if (!this.active) return;
 
         // ctx.canvas または game オブジェクトから画面幅・高さを正確に取得
-        const width = ctx.canvas?.width || this.game?.width || 320;
-        const height = ctx.canvas?.height || this.game?.height || 240;
+        const width = ctx.canvas.width;
+        const height = ctx.canvas.height;
         const barHeight = 20; // 上下の警告バーの太さ
 
         ctx.save();

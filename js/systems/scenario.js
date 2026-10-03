@@ -332,7 +332,7 @@ export class ScenarioManager {
         } else if (data.x !== undefined && data.x !== null) {
             posX = data.x - enemy.width / 2;
         } else {
-            posX = Math.random() * (game.width - enemy.width);
+            posX = game.random.range(0, game.width - enemy.width);
         }
 
         if (data.from === 'bottom') {
