@@ -25,6 +25,10 @@ export class GameUIManager {
             warpPlayer: document.getElementById('fullscreen-warp-player')
         };
 
+        // DOMキャッシュ比較用メモリ
+        this._lastScoreText = '';
+        this._lastHiScoreText = '';
+
         this.resetGameUIState();
     }
 
@@ -34,7 +38,7 @@ export class GameUIManager {
         this.updateLivesUI();
     }
 
-     /** UI状態リセット系 */
+    /** UI状態リセット系 */
 
     resetGameUIState() {
         this.hasPlayedCounterStopSE = false;
@@ -52,17 +56,10 @@ export class GameUIManager {
         this.isKvActive = false;
         this._kvShown = false;
 
-        const ctx = this.game.ctx;
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, this.game.width, this.game.height);
-        ctx.restore();
-
         this._endingPhase = 0;
         this._endingTimer = 0;
         this._endingKvAlpha = 0;
-        this.game.isEnding = false;
+        if (this.game) this.game.isEnding = false;
 
         if (this.dom.fullscreenKv) {
             this.dom.fullscreenKv.style.display = 'none';
@@ -72,6 +69,9 @@ export class GameUIManager {
             this.dom.warpPlayer.style.opacity = '1';
             this.dom.warpPlayer.classList.remove('trigger-warp');
         }
+
+        this._lastScoreText = '';
+        this._lastHiScoreText = '';
     }
 
     /** DOM / HTML UI更新系 */
@@ -81,29 +81,37 @@ export class GameUIManager {
         const MAX_DISPLAY_SCORE = 9999990;
 
         if (this.dom.scoreDisplay) {
-            const displayScore = Math.min(this.game.score, MAX_DISPLAY_SCORE);
+            const displayScore = Math.min(this.game.score || 0, MAX_DISPLAY_SCORE);
             const isCounterStopped = (this.game.score >= MAX_DISPLAY_SCORE);
+            const scoreText = `SCORE: ${displayScore.toString().padStart(DIGITS, '0')}`;
 
-            this.dom.scoreDisplay.innerText = `SCORE: ${displayScore.toString().padStart(DIGITS, '0')}`;
-            this.dom.scoreDisplay.classList.toggle('counter-stop', isCounterStopped);
+            if (this._lastScoreText !== scoreText) {
+                this.dom.scoreDisplay.innerText = scoreText;
+                this.dom.scoreDisplay.classList.toggle('counter-stop', isCounterStopped);
+                this._lastScoreText = scoreText;
+            }
 
             if (isCounterStopped && !this.hasPlayedCounterStopSE) {
-                if (this.game.sc.audio) this.game.sc.audio.playPowerUp();
+                this.game.sc?.audio?.playPowerUp?.();
                 this.hasPlayedCounterStopSE = true;
             }
         }
 
         if (this.dom.hiScoreDisplay) {
-            const currentHi = this.game.sc.highScore || 0;
+            const currentHi = this.game.sc?.highScore || 0;
             const displayHiScore = Math.min(currentHi, MAX_DISPLAY_SCORE);
+            const hiScoreText = `HI-SCORE: ${displayHiScore.toString().padStart(DIGITS, '0')}`;
 
-            this.dom.hiScoreDisplay.innerText = `HI-SCORE: ${displayHiScore.toString().padStart(DIGITS, '0')}`;
-            this.dom.hiScoreDisplay.classList.toggle('counter-stop', currentHi >= MAX_DISPLAY_SCORE);
+            if (this._lastHiScoreText !== hiScoreText) {
+                this.dom.hiScoreDisplay.innerText = hiScoreText;
+                this.dom.hiScoreDisplay.classList.toggle('counter-stop', currentHi >= MAX_DISPLAY_SCORE);
+                this._lastHiScoreText = hiScoreText;
+            }
         }
     }
 
     triggerExtendBlink() {
-        this.game.sc.audio.playPowerUp();
+        this.game.sc?.audio?.playPowerUp?.();
         this.isExtending = true;
         this.updateLivesUI();
 
@@ -119,11 +127,11 @@ export class GameUIManager {
         const el = this.dom.livesDisplay;
         if (!el) return;
 
-        const count = Math.max(0, this.game.lives - 1);
+        const count = Math.max(0, (this.game.lives || 0) - 1);
         const icon = "🚀";
 
         if (count === 0) {
-            el.innerHTML = "";
+            if (el.innerHTML !== "") el.innerHTML = "";
             return;
         }
 
@@ -131,7 +139,7 @@ export class GameUIManager {
 
         if (count <= 3) {
             if (this.isExtending) {
-                const baseIcons = icon.repeat(count - 1);
+                const baseIcons = icon.repeat(Math.max(0, count - 1));
                 html = `${baseIcons}<span class="extend-blink-single">${icon}</span>`;
             } else {
                 html = icon.repeat(count);
@@ -165,29 +173,30 @@ export class GameUIManager {
         }
         debugEl.style.display = 'block';
         
-        document.getElementById('debug-frame').innerText = this.game.frame;
-        document.getElementById('debug-scn-frame').innerText = this.game.scenario.currentScenarioFrame;
-        document.getElementById('debug-index').innerText = `${this.game.scenario.currentIndex} / ${this.game.scenario.length}`;
+        const setElText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val;
+        };
+
+        setElText('debug-frame', this.game.frame);
+        setElText('debug-scn-frame', this.game.scenario?.currentScenarioFrame || 0);
+        setElText('debug-index', `${this.game.scenario?.currentIndex || 0} / ${this.game.scenario?.length || 0}`);
 
         const bonusEl = document.getElementById('debug-bonus-time');
-        const boss = this.game.entities.find(e => e.isBoss); 
+        const boss = this.game.entities?.find(e => e.isBoss); 
         
         if (boss && this.game.bossStartTime > 0 && bonusEl) {
             const elapsed = this.game.frame - this.game.bossStartTime;
-            const remaining = Math.max(0, boss.timeLimit - elapsed);
+            const remaining = Math.max(0, (boss.timeLimit || 0) - elapsed);
             bonusEl.innerText = `${remaining}F (${(remaining / 60).toFixed(2)}s)`;
             bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
         } else if (bonusEl) {
             bonusEl.innerText = "---";
             bonusEl.style.color = "#888";
         }        
-        document.getElementById('debug-load').innerText = this.game.entities.length;
-
-        const spawnEl = document.getElementById('debug-spawn');
-        if (spawnEl) spawnEl.innerText = this.game.stats.enemiesSpawned;
-
-        const killEl = document.getElementById('debug-kill');
-        if (killEl) killEl.innerText = this.game.stats.enemiesKilled;
+        setElText('debug-load', this.game.entities?.length || 0);
+        setElText('debug-spawn', this.game.stats?.enemiesSpawned || 0);
+        setElText('debug-kill', this.game.stats?.enemiesKilled || 0);
     }
 
 
@@ -201,24 +210,24 @@ export class GameUIManager {
         ctx.font = '16px "Press Start 2P", cursive';
         ctx.textAlign = 'center';
 
-        // 優先度1: エンディング演出（個別メソッドへ）
+        // 優先度1: エンディング演出
         if (this.game.isEnding) {
             this._drawEndingOverlay(ctx);
             ctx.restore();
             return;
         }
 
-        // 優先度2: ゲームオーバー演出（個別メソッドへ）
-        if (!this.game.player.alive && this.game.lives <= 0) {
+        // 優先度2: ゲームオーバー演出
+        if (this.game.player && !this.game.player.alive && this.game.lives <= 0) {
             this._drawGameOverOverlay(ctx);
             ctx.restore();
             return;
         }
 
-        // 優先度3: 道中KV演出（個別メソッドへ）
+        // 優先度3: 道中KV演出
         this._drawStageKVOverlay(ctx);
 
-        // 優先度4: ステージクリア演出（個別メソッドへ）
+        // 優先度4: ステージクリア演出
         if (this.game.isCleared) {
             this._drawStageClearOverlay(ctx);
         }
@@ -233,7 +242,7 @@ export class GameUIManager {
 
 
     // ---------------------------------------------------------------
-    // 🧩 演出ごとの個別描画メソッド（プライベート関数化）
+    // 🧩 演出ごとの個別描画メソッド
     // ---------------------------------------------------------------
 
     /** 🌟 1. エンディング演出 */
@@ -249,14 +258,16 @@ export class GameUIManager {
             if (container) container.style.display = 'none';
 
             if (domKv) {
-                const kvPath = `${this.game.sc.assetBase}ending/kv.png`;
+                const assetBase = this.game.sc?.assetBase || '';
+                const kvPath = `${assetBase}ending/kv.png`;
                 domKv.style.backgroundImage = `url('${kvPath}')`;
                 domKv.style.display = 'flex';
                 setTimeout(() => { domKv.style.opacity = '1'; }, 50);
             }
 
             if (warpPlayer) {
-                const playerImgPath = `${this.game.sc.assetBase}player.webp`;
+                const assetBase = this.game.sc?.assetBase || '';
+                const playerImgPath = `${assetBase}player.webp`;
                 warpPlayer.src = playerImgPath;
                 warpPlayer.classList.add('trigger-warp');
             }
@@ -280,7 +291,7 @@ export class GameUIManager {
                 this.resetGameUIState();
                 if (container) container.style.display = 'block';
                 console.log("[Ending] Full HTML-Ending completed. To Credits.");
-                this.game.endSession("ALL STAGES CLEARED!");
+                this.game.endSession?.("ALL STAGES CLEARED!");
             }
         }
     }
@@ -300,12 +311,14 @@ export class GameUIManager {
         let kvPath = null;
         let kvDuration = 180;
 
-        if (this.game.scenario.kv) {
-            if (typeof this.game.scenario.kv === 'object') {
-                kvPath = this.game.scenario.kv.path;
-                kvDuration = this.game.scenario.kv.duration || 180;
+        const scenario = this.game.scenario || {};
+
+        if (scenario.kv) {
+            if (typeof scenario.kv === 'object') {
+                kvPath = scenario.kv.path;
+                kvDuration = scenario.kv.duration || 180;
             } else {
-                kvPath = this.game.scenario.kv;
+                kvPath = scenario.kv;
             }
         }
 
@@ -332,7 +345,7 @@ export class GameUIManager {
                 
                 const isCorrectImageLoaded = kvImage && 
                     kvImage.complete && 
-                    kvImage.naturalWidth !== 0 && 
+                    kvImage.naturalWidth > 0 && 
                     rawSrc.endsWith(targetPath);
 
                 if (isCorrectImageLoaded) {
@@ -349,7 +362,8 @@ export class GameUIManager {
                     }
 
                     const baseWidth = this.game.width;
-                    const baseHeight = kvImage.height * (this.game.width / kvImage.width);
+                    const aspectRatio = kvImage.height / kvImage.width;
+                    const baseHeight = baseWidth * aspectRatio;
                     const scale = 1.12 - (progress * 0.12); 
                     const drawWidth = baseWidth * scale;
                     const drawHeight = baseHeight * scale;
@@ -376,11 +390,11 @@ export class GameUIManager {
             const textCenterY = this.game.height * 0.65;
             ctx.font = '16px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha.toFixed(2)})`;
-            ctx.fillText(`STAGE ${this.game.currentStageNum}`, this.game.width / 2, textCenterY);
+            ctx.fillText(`STAGE ${this.game.currentStageNum || 1}`, this.game.width / 2, textCenterY);
             
             ctx.font = '11px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha.toFixed(2)})`;
-            ctx.fillText(this.game.scenario.stageName || '', this.game.width / 2, textCenterY + 30);
+            ctx.fillText(scenario.stageName || '', this.game.width / 2, textCenterY + 30);
 
         } else if (this.game.frame >= kvDuration && this.isKvActive) {
             this.isKvActive = false;
@@ -389,9 +403,9 @@ export class GameUIManager {
 
     /** 🎉 4. ステージクリア演出 */
     _drawStageClearOverlay(ctx) {
-        const stageNameStr = this.game.scenario.stageName; 
+        const stageNameStr = this.game.scenario?.stageName || ''; 
         ctx.fillStyle = '#0FF';
-        ctx.fillText(`STAGE ${this.game.currentStageNum} CLEAR`, this.game.width / 2, this.game.height / 2);            
+        ctx.fillText(`STAGE ${this.game.currentStageNum || 1} CLEAR`, this.game.width / 2, this.game.height / 2);            
         ctx.font = '10px "Press Start 2P", cursive';
         ctx.fillStyle = '#FFF';
         ctx.fillText(stageNameStr, this.game.width / 2, this.game.height / 2 + 30);
@@ -420,7 +434,7 @@ export class GameUIManager {
         ctx.shadowBlur = 0;
         ctx.font = '8px "Press Start 2P", cursive';
 
-        if (Math.floor(this.game.frame / 30) % 2 === 0) {
+        if (Math.floor((this.game.frame || 0) / 30) % 2 === 0) {
             ctx.fillStyle = '#00ffff';
         } else {
             ctx.fillStyle = '#777777';

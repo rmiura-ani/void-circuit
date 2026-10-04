@@ -65,7 +65,7 @@ export class Enemy extends Entity {
 
     /** アセット読み込みの共通化 */
     _loadAsset(game) {
-        if (game?.assets) {
+        if (game.assets) {
             this.image = game.assets.get(this.imageName);
             this.isLoaded = !!this.image; 
             this.loadError = !this.isLoaded;
@@ -429,7 +429,7 @@ export class BossEnemy extends Enemy {
 
         for (let i = 0; i < explosionCount; i++) {
             setTimeout(() => {
-                if (!game?.collisions) return;
+                if (!game.collisions) return;
 
                 const shouldPlaySound = !soundoff && (i === 0 || i === 3 || i === 7);
 

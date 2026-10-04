@@ -41,7 +41,7 @@ export class CircuitWalkerEnemy extends Enemy {
         if (this.timer % this.turnInterval === 0) {
             if (this.vy !== 0) {
                 this.vy = 0;
-                this.vx = (this.x < (game?.width || 800) / 2) ? 2.5 : -2.5; // 画面中央方向へ曲がる
+                this.vx = (this.x < game.width / 2) ? 2.5 : -2.5; // 画面中央方向へ曲がる
             } else {
                 this.vx = 0;
                 this.vy = 2.5; // 再び下降
@@ -78,7 +78,7 @@ export class VoidBitEnemy extends Enemy {
         this.angle += 0.04; // 円周運動
 
         // 自機が存在すれば、自機を中心に円運動を行う
-        if (game?.player?.alive) {
+        if (game.player.alive) {
             const px = game.player.x + game.player.width / 2;
             const py = game.player.y + game.player.height / 2;
             this.x = px + Math.cos(this.angle) * this.radius - this.width / 2;
@@ -121,8 +121,7 @@ export class GateKeeperEnemy extends Enemy {
         this.y += 0.3; // 非常にゆっくり下降
         this.x += this.speedX;
 
-        const screenWidth = game?.width || 800;
-        if (this.x < 30 || this.x > screenWidth - 30 - this.width) {
+        if (this.x < 30 || this.x > game.width - 30 - this.width) {
             this.speedX = -this.speedX; // 画面端で反転
         }
 

@@ -36,7 +36,7 @@ export class DustScoutEnemy extends Enemy {
 
         this.y += this.speedY;
 
-        if (this.y <= (game?.height || 600) / 2 && !this.hasShot) {
+        if (this.y <= game.height / 2 && !this.hasShot) {
             this.shoot(game);
             this.hasShot = true;
         }
@@ -286,9 +286,7 @@ export class WormSegment extends Enemy {
         this.isTail = isTail;
         this.customImageKey = imageKey;
 
-        if (game?.assets) {
-            this.image = game.assets.get(imageKey);
-        }
+        this.image = game.assets.get(imageKey);
 
         this.width = head.width || 24;
         this.height = head.height || 24;
@@ -397,9 +395,8 @@ export class WormEnemy extends Enemy {
         if (!this.active) return;
         this.timer += 0.04;
 
-        const gameHeight = game?.height || 600;
-        const upperThreshold = gameHeight * 0.25;
-        const lowerThreshold = gameHeight * 0.66;
+        const upperThreshold =  game.height * 0.25;
+        const lowerThreshold =  game.height * 0.66;
 
         if (this.y >= lowerThreshold && this.moveDirectionY > 0) {
             this.moveDirectionY = -1;

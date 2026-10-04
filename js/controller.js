@@ -18,7 +18,7 @@ import { ReplayUIManager } from './systems/replay-ui.js';
  */
 export class SystemController {
     constructor() {
-        this.VERSION = "0.69";
+        this.VERSION = "0.70";
         this.canvas = document.getElementById('game-canvas');
 
         // アセット参照パスの判別

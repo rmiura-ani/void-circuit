@@ -53,11 +53,11 @@ export class InputManager {
             }, { signal });
         }
 
-        // --- 画面外クリック / タップ検出（PC・スマホ両対応） ---
-        const handleOutClick = (e) => {
-            const target = e.touches && e.touches.length > 0 ? e.touches[0].target : e.target;
-            
-            // ★ Canvas自体のクリック/タップであれば「画面外」とは判定しない
+        // --- 画面外クリック / タップ検出（PointerEventsでマウス/タッチの重複発火を防止） ---
+        const handleOutPointerDown = (e) => {
+            const target = e.target;
+
+            // Canvas自体の操作であれば「画面外」とは判定しない
             if (this.canvas && (target === this.canvas || this.canvas.contains(target))) {
                 return;
             }
@@ -66,11 +66,12 @@ export class InputManager {
             const ignoreEl = document.getElementById(this.ignoreElementId);
             if (ignoreEl?.contains(target)) return;
 
+            // 画面外が押されたフラグを立てる
             this.isCanvasOutClicked = true;
         };
 
-        window.addEventListener('mousedown', handleOutClick, { signal });
-        window.addEventListener('touchstart', handleOutClick, { signal });
+        // mousedown / touchstart の代わりに pointerdown 一本に統一
+        window.addEventListener('pointerdown', handleOutPointerDown, { signal });
 
         // マウス (canvas内)
         if (this.canvas) {

@@ -93,12 +93,10 @@ export class HeatArmorEnemy extends Enemy {
 
     /** 正面耐熱装甲：自機が正面（幅±20px以内）から攻撃した場合は無効化 */
     takeDamage(game, amount) {
-        if (game?.player) {
-            const playerX = game.player.x + game.player.width / 2;
-            const myX = this.x + this.width / 2;
-            if (Math.abs(playerX - myX) < 20) {
-                return false;
-            }
+        const playerX = game.player.x + game.player.width / 2;
+        const myX = this.x + this.width / 2;
+        if (Math.abs(playerX - myX) < 20) {
+            return false;
         }
         return super.takeDamage(game, amount);
     }

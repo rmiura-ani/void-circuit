@@ -207,7 +207,7 @@ export class LeechParasiteEnemy extends Enemy {
         if (!this.active) return;
 
         // 常に自機の中心をジワジワ狙う誘導移動
-        if (game?.player?.alive) {
+        if (game.player.alive) {
             const dx = (game.player.x + game.player.width / 2) - (this.x + this.width / 2);
             const dy = (game.player.y + game.player.height / 2) - (this.y + this.height / 2);
             const dist = Math.hypot(dx, dy) || 1;
@@ -252,8 +252,6 @@ export class HeartNucleusEnemy extends Enemy {
     }
 
     _applySuctionToPlayer(game) {
-        if (!game?.player) return;
-
         const enemyCenterX = this.x + this.width / 2;
         const enemyCenterY = this.y + this.height / 2;
         const playerCenterX = game.player.x + game.player.width / 2;

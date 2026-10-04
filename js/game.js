@@ -17,7 +17,6 @@ import { Random } from './systems/random.js';
 import { ReplayManager } from './systems/replayManager.js';
 import { ReplayStorage } from './systems/replayStorage.js';
 
-
 import './entities/enemies/index.js'; // 全ステージの敵がレジストリに登録される
 
 import { Player, Bullet } from './entities/player.js';
@@ -34,26 +33,10 @@ const GAME_CONFIG = {
     PLAYER_SPAWN_INVINCIBLE_TIME: 180,
     FPS: 60,
     DIFFICULTY_PARAMS: {
-        'EASY': { 
-            fireRate: 0.7, 
-            bulletSpeed: 0.75, 
-            wayBonus: -1 
-        },
-        'NORMAL': { 
-            fireRate: 1.0, 
-            bulletSpeed: 0.9,  
-            wayBonus: 0  
-        },
-        'HARD': { 
-            fireRate: 1.3, 
-            bulletSpeed: 1.0,  
-            wayBonus: 1  
-        },
-        'VERY HARD': { 
-            fireRate: 1.6, 
-            bulletSpeed: 1.1,  
-            wayBonus: 2  
-        }
+        'EASY': { fireRate: 0.7, bulletSpeed: 0.75, wayBonus: -1 },
+        'NORMAL': { fireRate: 1.0, bulletSpeed: 0.9, wayBonus: 0 },
+        'HARD': { fireRate: 1.3, bulletSpeed: 1.0, wayBonus: 1 },
+        'VERY HARD': { fireRate: 1.6, bulletSpeed: 1.1, wayBonus: 2 }
     }
 };
 
@@ -86,13 +69,16 @@ export class Game {
         this._score = 0;
         this.lives = controller.config.lives;
         this.isRunning = false;
+        this.weaponSwitchCooldown = 0; // 武器切り替え連打防止タイマー
 
         this._abortController = null;
 
         this.reset();
     }
 
-    // --- Getter / Setter ---
+    // ==========================================
+    // 1. Getter / Setter
+    // ==========================================
 
     get score() { return this._score; }
     set score(value) {
@@ -106,7 +92,9 @@ export class Game {
     }
 
 
-    // --- パブリックメソッド（ゲームフロー制御） ---
+    // ==========================================
+    // 2. ライフサイクル & セッション・ステージ制御
+    // ==========================================
 
     /** 初期化 */
     reset(seed = Date.now()) {
@@ -120,7 +108,7 @@ export class Game {
 
         this.extendThreshold = this.sc.config.extend; 
         this.extendIndex = 0;
-        this.hasExtended = false; // 単一値指定用フラグのリセット
+        this.hasExtended = false;
 
         this.missionConfig = {
             missionName: this.sc.tag,
@@ -140,6 +128,7 @@ export class Game {
         this.gameOverTimer = 0;
         this.clearTimer = 0;
         this.respawnTimer = 0;
+        this.weaponSwitchCooldown = 0;
         this.escCount = 0;
         this.escTimer = null;
 
@@ -150,59 +139,6 @@ export class Game {
 
         this.scenario.reset();
         this.sc.audio.resetBGM();
-    }
-
-    /** イベントリスナーの安全なアタッチ */
-    _attachEventListeners() {
-        this._detachEventListeners(); // 二重アタッチ防止
-
-        this._abortController = new AbortController();
-        const { signal } = this._abortController;
-
-        window.addEventListener('keydown', (e) => this.handleKeyDown(e), { signal });
-
-        if (this.replay.mode === 'RECORD') {
-
-            // --- ブラウザ非アクティブ時の自動ポーズ処理 ---
-            const triggerAutoPause = () => {
-                const isGameOver = (!this.player.alive && this.lives <= 0);
-
-                if (this.isRunning && !isGameOver && !this.isPaused) {
-                    this.isPaused = true;
-                    this.sc.audio.pauseBGM();
-                }
-            };
-
-            // タブ切り替え / バックグラウンド化
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) triggerAutoPause();
-            }, { signal });
-
-            // ウィンドウのフォーカス外れ
-            window.addEventListener('blur', triggerAutoPause, { signal });
-        }
-
-        // ポーズ解除：ポーズ中に Canvas をクリック/タップで再開
-        const resumeGame = (e) => {
-            if (this.isRunning && this.isPaused) {
-                e.stopPropagation();
-                this.isPaused = false;
-                this.sc.audio.resumeBGM();
-            }
-        };
-
-        if (this.canvas) {
-            this.canvas.addEventListener('mousedown', resumeGame, { signal });
-            this.canvas.addEventListener('touchstart', resumeGame, { signal });
-        }
-    }
-
-    /** イベントリスナーの解除 */
-    _detachEventListeners() {
-        if (this._abortController) {
-            this._abortController.abort();
-            this._abortController = null;
-        }
     }
 
     /** 通常ゲーム開始（録画モード） */
@@ -268,16 +204,104 @@ export class Game {
             return false;
         }
     }
-/** メインループ更新 */
+
+    /** 次ステージへ */
+    async goToNextStage() { 
+        this.currentStageNum++;
+        this.isCleared = false;
+        this.clearTimer = 0;
+        this.frame = 0; 
+        
+        await this.initStage(this.currentStageNum);
+    }
+
+    /** ゲーム終了 */
+    endSession(msg) {
+        if (!this.isRunning && this.gameOverTimer > 182) return;
+        this.isRunning = false;
+
+        this._detachEventListeners();
+        this.stats.score = this.score;
+
+        const shouldSaveReplay = (msg === 'GAME OVER' || msg === 'ALL STAGES CLEARED!');
+        if (shouldSaveReplay && this.replay && this.replay.mode === 'RECORD') {
+            const replayData = this.replay.exportReplay();
+
+            if (replayData && replayData.log && replayData.log.length > 0) {
+                const savedId = ReplayStorage.save({
+                    seed: replayData.seed,
+                    log: replayData.log,
+                    score: this.score,
+                    stage: this.currentStageNum
+                });
+                console.log(`[Game] ✅ リプレイを保存しました (ID: ${savedId})`);
+            } else {
+                console.warn(`[Game] ⚠️ リプレイログが空のため保存スキップ`);
+            }
+        }
+
+        if (typeof Analytics !== 'undefined') {
+            Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
+            Analytics.logPostScore(this.score, this.currentStageNum);
+        }
+
+        const isNew = this.score > this.sc.highScore && this.score > 0;
+        if (isNew) {
+            this.sc.highScore = this.score;
+            if (typeof Analytics !== 'undefined') {
+                Analytics.logAchievement('HI_SCORE_BREAK');
+            }
+        }
+        
+        // UIのクリーンアップは GameUIManager 経由で行う
+        if (typeof this.ui.hideWeaponUI === 'function') {
+            this.ui.hideWeaponUI();
+        } else {
+            const weaponContainer = document.getElementById('weapon-container');
+            if (weaponContainer) weaponContainer.style.display = 'none';
+        }
+        
+        this.sc.showStartScreen(msg, isNew);
+        this.sc.startIdleTimer();
+    }
+
+    /** インスタンス破棄 */
+    destroy() {
+        this.isRunning = false;
+        this._detachEventListeners();
+        if (this.escTimer) clearTimeout(this.escTimer);
+    }
+
+
+    // ==========================================
+    // 3. フレーム更新ループ (Update)
+    // ==========================================
+
+    /** メインループ更新 */
     update() {
-        if (this.isPaused || !this.isRunning) return;
+        if (!this.isRunning) return;
+
+        // ポーズ中は入力フラグのみクリアして処理を中断（ポーズ解除直後の武器誤切り替え防止）
+        if (this.isPaused) {
+            if (this.sc.input) {
+                if (typeof this.sc.input.getAndResetRightClick === 'function') this.sc.input.getAndResetRightClick();
+                if (typeof this.sc.input.getAndResetDoubleTap === 'function') this.sc.input.getAndResetDoubleTap();
+                if (typeof this.sc.input.getAndResetCanvasOutClick === 'function') this.sc.input.getAndResetCanvasOutClick();
+            }
+            return;
+        }
+
+        // 武器切り替えクールダウンタイマーの更新
+        if (this.weaponSwitchCooldown > 0) {
+            this.weaponSwitchCooldown--;
+        }
 
         this.background.update(this.frame);
 
         const isPlayback = this.replay && this.replay.mode === 'PLAYBACK';
 
         if (isPlayback) {
-            // --- 1. 再生モード：ログから状態を読み込み ---
+            // 1. 再生モード：ログから状態を読み込み
             const frameData = this.replay.getCurrentFrameData();
 
             if (!frameData && this.replay.log.length > 0) {
@@ -296,11 +320,10 @@ export class Game {
                     isCanvasOutClick: false
                 };
 
-                // 再生中もショット・武器切替アニメーション等の更新のために呼ぶ
                 this.player.update(this.width, this.height, this.currentInputState);
             }
         } else {
-            // --- 2. 通常プレイ：Input管理クラスから1度だけ取得して確定 ---
+            // 2. 通常プレイ：Input管理クラスから取得して確定
             const isKeyFiring = this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space');
             const isFiring = isKeyFiring || this.sc.input.isTouching;
 
@@ -309,6 +332,14 @@ export class Game {
             const isCanvasOutClick = typeof this.sc.input.getAndResetCanvasOutClick === 'function' 
                 ? this.sc.input.getAndResetCanvasOutClick() : false;
 
+            // クールダウン中は切り替えトリガーを無視する
+            const rawSwitchTriggered = isRightClick || isDoubleTap || isCanvasOutClick;
+            const isWeaponSwitchTriggered = rawSwitchTriggered && (this.weaponSwitchCooldown === 0);
+
+            if (isWeaponSwitchTriggered) {
+                this.weaponSwitchCooldown = 12; // 約0.2秒間のガード
+            }
+
             this.currentInputState = {
                 isTouching: this.sc.input.isTouching,
                 touchX: this.sc.input.touchX,
@@ -316,16 +347,14 @@ export class Game {
                 isFiring: isFiring,
                 isRightClick: isRightClick,
                 isDoubleTap: isDoubleTap,
-                isCanvasOutClick: isCanvasOutClick
+                isCanvasOutClick: isCanvasOutClick,
+                isWeaponSwitchTriggered: isWeaponSwitchTriggered // ガード済み最終トリガー
             };
 
             if (this.player) {
-                // 自機の移動＆武器切替（判定済みデータを与えるだけ）
                 this.player.update(this.width, this.height, this.currentInputState);
 
-                // 録画ログ出力（右クリック・ダブルタップ・画面外タップのいずれが発生したかを記録）
                 if (this.replay && this.replay.mode === 'RECORD') {
-                    const isWeaponSwitchTriggered = isRightClick || isDoubleTap || isCanvasOutClick;
                     this.replay.recordFrame(this.player.x, this.player.y, isFiring, isWeaponSwitchTriggered);
                 }
             }
@@ -386,12 +415,6 @@ export class Game {
         this.entities = this.entities.filter(e => e.active);
     }
 
-    /** ボス戦スタート */
-    startBossBattle() {
-        this.isBossActive = true;
-        this.bossStartTime = this.frame;
-    }
-
     /** ステージクリア判定 */
     checkClearCondition() {
         if (this.frame < 180) return;
@@ -425,14 +448,23 @@ export class Game {
         }
     }
 
-    /** 次ステージへ */
-    async goToNextStage() { 
-        this.currentStageNum++;
-        this.isCleared = false;
-        this.clearTimer = 0;
-        this.frame = 0; 
-        
-        await this.initStage(this.currentStageNum);
+    /** 入力モード判定の更新 */
+    updateInputMode() {
+        if (this.stats.inputMode === 'BOTH') return;
+        const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
+        if (this.stats.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.stats.inputMode = 'BOTH';
+        else if (this.stats.inputMode === 'MOUSE' && isKeyActive) this.stats.inputMode = 'BOTH';
+    }
+
+
+    // ==========================================
+    // 4. ゲームイベント & ルール処理
+    // ==========================================
+
+    /** ボス戦スタート */
+    startBossBattle() {
+        this.isBossActive = true;
+        this.bossStartTime = this.frame;
     }
 
     /** 被弾ミス */
@@ -490,6 +522,92 @@ export class Game {
         }
     }
 
+
+    // ==========================================
+    // 5. イベントハンドラ & 描画
+    // ==========================================
+
+    /** イベントリスナーの安全なアタッチ */
+    _attachEventListeners() {
+        this._detachEventListeners(); // 二重アタッチ防止
+
+        this._abortController = new AbortController();
+        const { signal } = this._abortController;
+
+        window.addEventListener('keydown', (e) => this.handleKeyDown(e), { signal });
+
+        if (this.replay.mode === 'RECORD') {
+            // ブラウザ非アクティブ時の自動ポーズ処理
+            const triggerAutoPause = () => {
+                const isGameOver = (!this.player.alive && this.lives <= 0);
+
+                if (this.isRunning && !isGameOver && !this.isPaused) {
+                    this.isPaused = true;
+                    this.sc.audio.pauseBGM();
+                }
+            };
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) triggerAutoPause();
+            }, { signal });
+
+            window.addEventListener('blur', triggerAutoPause, { signal });
+        }
+
+        // ポーズ解除：ポーズ中に Canvas をクリック/タップで再開
+        // pointerdown 一本にまとめて二重発火を完全予防
+        const resumeGame = (e) => {
+            if (this.isRunning && this.isPaused) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.isPaused = false;
+                this.sc.audio.resumeBGM();
+            }
+        };
+
+        if (this.canvas) {
+            this.canvas.addEventListener('pointerdown', resumeGame, { signal });
+        }
+    }
+
+    /** イベントリスナーの解除 */
+    _detachEventListeners() {
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
+        }
+    }
+
+    handleKeyDown(e) {
+        if (!this.isRunning) return;
+        if (e.key === 'Escape') this.handleEmergencyEscape();
+    }
+
+    handleMouseDown(e) { }
+
+    handleEmergencyEscape() {
+        if (this.escTimer) clearTimeout(this.escTimer);
+
+        this.escCount++;
+        this.ui.visualEffectWarning(); 
+
+        if (this.escCount >= 2) {
+            this.escCount = 0;
+            this.escTimer = null;
+            
+            this.lives = 0;
+            this.gameOverTimer = 180;
+            if (this.player.alive) this.onPlayerMiss(); 
+            this.sc.audio.fadeOutBGM(1000);
+            this.endSession("EMERGENCY EXIT");
+        } else {
+            this.escTimer = setTimeout(() => {
+                this.escCount = 0;
+                this.escTimer = null;
+            }, 1000);
+        }
+    }
+
     /** 描画マスタ */
     draw() {
         this.ctx.fillStyle = '#000';
@@ -522,97 +640,5 @@ export class Game {
 
         this.player.draw(this.ctx);
         this.ui.drawOverlayMessages(this.ctx);
-    }
-
-    /** ゲーム終了 */
-    endSession(msg) {
-        if (!this.isRunning && this.gameOverTimer > 182) return;
-        this.isRunning = false;
-
-        this._detachEventListeners();
-        this.stats.score = this.score;
-
-        // ★★★ "GAME OVER" か "ALL STAGES CLEARED!" の時だけリプレイ保存 ★★★
-        const shouldSaveReplay = (msg === 'GAME OVER' || msg === 'ALL STAGES CLEARED!');
-        if (shouldSaveReplay && this.replay && this.replay.mode === 'RECORD') {
-            const replayData = this.replay.exportReplay();
-
-            if (replayData && replayData.log && replayData.log.length > 0) {
-                const savedId = ReplayStorage.save({
-                    seed: replayData.seed,
-                    log: replayData.log,
-                    score: this.score,
-                    stage: this.currentStageNum
-                });
-                console.log(`[Game] ✅ リプレイを保存しました (ID: ${savedId})`);
-            } else {
-                console.warn(`[Game] ⚠️ リプレイログが空のため保存スキップ`);
-            }
-        }
-
-        if (typeof Analytics !== 'undefined') {
-            Analytics.logLevelEnd(this.missionConfig, this.stats, this.score, this.isCleared);
-            Analytics.logPostScore(this.score, this.currentStageNum);
-        }
-
-        const isNew = this.score > this.sc.highScore && this.score > 0;
-        if (isNew) {
-            this.sc.highScore = this.score;
-            if (typeof Analytics !== 'undefined') {
-                Analytics.logAchievement('HI_SCORE_BREAK');
-            }
-        }
-        
-        const weaponContainer = document.getElementById('weapon-container');
-        if (weaponContainer) weaponContainer.style.display = 'none';
-        
-        this.sc.showStartScreen(msg, isNew);
-        this.sc.startIdleTimer();
-    }
-
-    /** インスタンス破棄 */
-    destroy() {
-        this.isRunning = false;
-        this._detachEventListeners();
-        if (this.escTimer) clearTimeout(this.escTimer);
-    }
-
-    // --- プライベート・内部処理用メソッド ---
-
-    handleKeyDown(e) {
-        if (!this.isRunning) return;
-        if (e.key === 'Escape') this.handleEmergencyEscape();
-    }
-
-    handleMouseDown(e) { }
-
-    handleEmergencyEscape() {
-        if (this.escTimer) clearTimeout(this.escTimer);
-
-        this.escCount++;
-        this.ui.visualEffectWarning(); 
-
-        if (this.escCount >= 2) {
-            this.escCount = 0;
-            this.escTimer = null;
-            
-            this.lives = 0;
-            this.gameOverTimer = 180;
-            if (this.player.alive) this.onPlayerMiss(); 
-            this.sc.audio.fadeOutBGM(1000);
-            this.endSession("EMERGENCY EXIT");
-        } else {
-            this.escTimer = setTimeout(() => {
-                this.escCount = 0;
-                this.escTimer = null;
-            }, 1000);
-        }
-    }
-
-    updateInputMode() {
-        if (this.stats.inputMode === 'BOTH') return;
-        const isKeyActive = (this.sc.input.isPressed('KeyZ') || this.sc.input.isPressed('Space') || this.sc.input.isPressed('ArrowUp'));
-        if (this.stats.inputMode === 'KEYBOARD' && this.sc.input.isTouching) this.stats.inputMode = 'BOTH';
-        else if (this.stats.inputMode === 'MOUSE' && isKeyActive) this.stats.inputMode = 'BOTH';
     }
 }

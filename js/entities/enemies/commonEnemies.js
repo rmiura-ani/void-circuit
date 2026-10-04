@@ -179,7 +179,7 @@ export class AssaultEnemy extends Enemy {
         this.x += this.vx;
         this.y += this.vy;
 
-        if (this.state === 'FALL' && game?.player?.alive) {
+        if (this.state === 'FALL' && game.player.alive) {
             if (this.y >= game.player.y - 150) {
                 this.state = 'CHARGE';
                 const dx = game.player.x - this.x;
@@ -217,7 +217,7 @@ export class HunterEnemy extends Enemy {
 
         this.y += this.speedY;
 
-        if (game?.player?.alive) {
+        if (game.player.alive) {
             const targetX = game.player.x;
             if (this.x < targetX) {
                 this.x = Math.min(this.x + this.speedX, targetX);
