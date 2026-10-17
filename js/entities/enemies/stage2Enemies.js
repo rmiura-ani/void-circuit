@@ -139,13 +139,13 @@ export class WaveSpreaderEnemy extends Enemy {
  */
 export class BubbleMineEnemy extends Enemy {
     speedY = 0.8; // 水中に漂うような非常にゆっくりとした降下
-    timer = game.random.range(0, 100)
-
+    timer = 0;
 
     get imageName() { return "enemy_bubble_mine.webp"; }
 
     constructor(game, bulletType = 'none', hp = 1) {
         super(game, bulletType, hp);
+        this.timer = game.random.range(0, 100)
     }
 
     setStartPosition(x, y) {
@@ -478,7 +478,7 @@ export class BossEnemy_02 extends BossEnemy {
         ctx.restore();
     }
 
-    onDie(game) {
+    onDie(game) {   
         // 水中母艦が水圧と爆破で崩壊していく連鎖大爆発演出
         for (let i = 0; i < 8; i++) {
             setTimeout(() => {

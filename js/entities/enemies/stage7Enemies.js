@@ -59,7 +59,7 @@ export class CircuitWalkerEnemy extends Enemy {
  * 2. VoidBit: 自機の周囲を円軌道で周回しながら中心に向けて高密度射撃を行う電子ビット機
  */
 export class VoidBitEnemy extends Enemy {
-    angle = game.random.angle();
+    angle = 0;  
     radius = 120; // 自機からの周回半径
     timer = 0;
 
@@ -70,6 +70,7 @@ export class VoidBitEnemy extends Enemy {
         this.width = 24;
         this.height = 24;
         this.baseShootInterval = 50;
+        this.angle = game.random.angle();
     }
 
     update(game) {

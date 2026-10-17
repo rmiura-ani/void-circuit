@@ -12,7 +12,6 @@ import { AudioManager } from './systems/audio.js';
 import { ConfigManager } from './config/config.js';
 import { ReplayUIManager } from './systems/replay-ui.js';
  import { Game } from './game.js';
-
 /**
  * SystemController: ゲーム全体のライフサイクル・システム統合管理
  */

@@ -107,7 +107,7 @@ export class CellMitosisEnemy extends Enemy {
  */
 export class PulseSporeEnemy extends Enemy {
     speedY = 0.8;
-    timer = game.random.range(0, 60);
+    timer = 0;
     scale = 1.0;
     hasPulsed = false;
 
@@ -115,6 +115,7 @@ export class PulseSporeEnemy extends Enemy {
 
     constructor(game, bulletType = 'eight-way', hp = 1) {
         super(game, bulletType, hp);
+        this._loadAssettimer = game.random.range(0, 60);
     }
 
     update(game) {
@@ -231,6 +232,7 @@ export class HeartNucleusEnemy extends Enemy {
     speedY = 0.4;
     timer = 0;
     suctionParticles = [];
+    healPulses = []; // --- 追加: 回復エフェクト管理用配列 ---
 
     get imageName() { return "enemy_heart_nucleus.webp"; }
 
@@ -244,9 +246,11 @@ export class HeartNucleusEnemy extends Enemy {
         for (let i = 0; i < particleCount; i++) {
             this.suctionParticles.push({
                 angle: game.random.angle(),
+                maxDistance: game.random.range(120, 150),
                 distance: game.random.range(120, 150),
-                speed: game.random.range(2, 5),
-                length: game.random.range(10, 25),
+                baseSpeed: game.random.range(1.5, 3),
+                length: game.random.range(12, 28),
+                alpha: game.random.range(0.4, 0.9),
             });
         }
     }
@@ -278,9 +282,48 @@ export class HeartNucleusEnemy extends Enemy {
         this.y += this.speedY;
         this._applySuctionToPlayer(game);
 
-        // 120F（約2秒）ごとに周囲のエネルギーを吸い上げてHPを1回復（最大HPは超えない）
+        // 120FごとにHP回復 & 回復パルス波の発生
         if (this.timer % 120 === 0 && this.hp < this.maxHp) {
             this.hp = Math.min(this.maxHp, this.hp + 1);
+
+            // --- 追加: 回復パルスの生成 ---
+            this.healPulses.push({
+                radius: 10,       // 開始半径
+                maxRadius: 60,    // 到達半径
+                speed: 2.5,       // 拡大スピード
+                alpha: 1.0        // 初期不透明度
+            });
+        }
+
+        // --- 追加: 回復パルスの更新処理 ---
+        for (let i = this.healPulses.length - 1; i >= 0; i--) {
+            const pulse = this.healPulses[i];
+            pulse.radius += pulse.speed;
+            
+            // 外側に広がるにつれて透明になる
+            pulse.alpha = 1 - (pulse.radius / pulse.maxRadius);
+
+            // 寿命を迎えたら配列から削除
+            if (pulse.radius >= pulse.maxRadius) {
+                this.healPulses.splice(i, 1);
+            }
+        }
+
+        // --- パーティクルの更新処理（イージング） ---
+        for (const p of this.suctionParticles) {
+            const progress = 1 - Math.max(0, p.distance / p.maxDistance);
+            const currentSpeed = p.baseSpeed + Math.pow(progress, 2) * 5;
+
+            p.distance -= currentSpeed;
+
+            if (p.distance <= 10) {
+                const newDist = game.random.range(120, 150);
+                p.maxDistance = newDist;
+                p.distance = newDist;
+                p.angle = game.random.angle();
+                p.baseSpeed = game.random.range(1.5, 3);
+                p.alpha = game.random.range(0.4, 0.9);
+            }
         }
 
         super.update(game);
@@ -290,25 +333,36 @@ export class HeartNucleusEnemy extends Enemy {
         super.draw(ctx, isDebug);
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(220, 180, 255, 0.6)';
-        ctx.lineWidth = 1.5;
-
         const centerX = this.x + this.width / 2;
         const centerY = this.y + this.height / 2;
 
+        ctx.globalCompositeOperation = 'lighter';
+
+        // --- 追加: 回復パルス（波紋）の描画 ---
+        for (const pulse of this.healPulses) {
+            ctx.strokeStyle = `rgba(120, 255, 180, ${Math.max(0, pulse.alpha)})`; // エメラルドグリーンの光
+            ctx.lineWidth = 3;
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, pulse.radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // --- 吸引パーティクルの描画 ---
         for (const p of this.suctionParticles) {
-            p.distance -= p.speed;
-
-            if (p.distance <= 10) {
-                p.distance =game.random.range(120, 150);
-                p.angle = game.random.angle();
-            }
-
             const startX = centerX + Math.cos(p.angle) * p.distance;
             const startY = centerY + Math.sin(p.angle) * p.distance;
 
             const endX = centerX + Math.cos(p.angle) * (p.distance - p.length);
             const endY = centerY + Math.sin(p.angle) * (p.distance - p.length);
+
+            const grad = ctx.createLinearGradient(startX, startY, endX, endY);
+            grad.addColorStop(0, `rgba(180, 130, 255, 0)`);
+            grad.addColorStop(0.5, `rgba(255, 120, 220, ${p.alpha})`);
+            grad.addColorStop(1, `rgba(255, 230, 255, ${p.alpha})`);
+
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 2;
 
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -322,7 +376,7 @@ export class HeartNucleusEnemy extends Enemy {
     static create(game, bType, hp, data = {}) {
         return new HeartNucleusEnemy(game, bType || 'eight-way', hp || 7);
     }
-}
+}       
 
 // ==========================================
 // 2. STAGE-5 ボス実体

@@ -111,13 +111,14 @@ export class RelicPrismEnemy extends Enemy {
  */
 export class MirageCrawlerEnemy extends Enemy {
     speedY = 1.0;
-    timer = game.random.range(0, 100);
+    timer = 0;
 
     get imageName() { return "enemy_mirage_crawler.webp"; }
 
     constructor(game, bulletType = 'aim', hp = 2) {
         super(game, bulletType, hp);
         this.baseShootInterval = 80;
+        this.timer = game.random.range(0, 100);
     }
 
     update(game) {
