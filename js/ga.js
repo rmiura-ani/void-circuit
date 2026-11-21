@@ -123,3 +123,6 @@ const Analytics = {
         });
     }
 };
+
+window.Analytics = Analytics;
+export default Analytics;

@@ -7,6 +7,7 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+import './ga.js';
 import { SystemController } from './controller.js';
 
 window.addEventListener('DOMContentLoaded', () => {

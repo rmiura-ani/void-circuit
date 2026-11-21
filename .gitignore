@@ -1,4 +1,8 @@
-# GAME assets (Hosted on assets.ani-net.com)
+node_modules
+dist
+
+# GAME assets (Hosted on  http://void-circuit-assets.ani-net.com/)
+public/void-circuit-assets
 *.mp3
 *.wav
 *.ogg
@@ -12,3 +16,4 @@ scenario.yaml
 # その他、開発環境用ファイル
 .DS_Store
 Thumbs.db
+

@@ -47,7 +47,7 @@ export class SystemController {
         const refPath = tag ? `tags/${tag}` : `heads/${branch}`;
         const githubBase = `https://raw.githubusercontent.com/rmiura-ani/void-circuit-assets/refs/${refPath}/`;
 
-        const LOCAL_ASSET_ROOT = "../void-circuit-assets/";
+        const LOCAL_ASSET_ROOT = "/void-circuit-assets/";
         const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
         
         let basePath = isLocal ? LOCAL_ASSET_ROOT : githubBase;

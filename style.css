@@ -330,7 +330,7 @@ canvas {
     margin-top: 10px;
 }
 
-/config-menu .menu-space {
+#config-menu .menu-space {
     height: 20px; /* 元の<BR>と同じくらいの好みの高さに調整してください */
     transition: height 0.4s ease;
 }

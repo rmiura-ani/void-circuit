@@ -8,6 +8,7 @@
  * Note: Included assets are the property of their respective owners.
  */
 
+import jsyaml from 'js-yaml';
 import { createEnemyInstance } from '../entities/enemy.js'; 
 import { WarningEffect } from '../entities//effects.js';
 
