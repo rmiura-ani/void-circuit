@@ -9,29 +9,26 @@ on:
     branches:
       - main
 
-# GitHub Pages デプロイ用の権限設定
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# 同じブランチで連続プッシュされた場合、古い実行をキャンセル
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # 1. ビルド＆TypeScript型チェック（全ブランチ・PRで実行）
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -42,11 +39,10 @@ jobs:
 
       - name: Upload artifact
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./dist
 
-  # 2. GitHub Pages へのデプロイ（main ブランチのみ実行）
   deploy:
     if: github.ref == 'refs/heads/main'
     environment:
