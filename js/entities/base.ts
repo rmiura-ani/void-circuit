@@ -7,49 +7,9 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
+import type { BoundsContext, GameContext, PlayerInputState } from '../types/entities.js';
 
-import type { AudioManager } from '../systems/audio.js';
-import type { InputManager } from '../systems/input.js';
-import type { Random } from '../systems/random.js';
-import type { ReplayManager } from '../systems/replayManager.js';
-
-export interface BoundsContext {
-    width: number;
-    height: number;
-}
-
-/**
- * 全エンティティが参照する Game の標準インターフェース
- * （循環参照を避けつつ、Game クラスとの契約を厳密に定義する）
- */
-export interface PlayerInputState {
-    isTouching?: boolean;
-    touchX?: number;
-    touchY?: number;
-    isRightClick?: boolean;
-    isDoubleTap?: boolean;
-    isCanvasOutClick?: boolean;
-    isFiring?: boolean;
-}
-
-export interface GameContext extends BoundsContext {
-    isRunning: boolean;
-    weaponMode: 'STRAIGHT' | 'WIDE';
-    currentInputState?: PlayerInputState;
-    random: Random;
-    entities: Entity[];
-    replay?: ReplayManager | null;
-    stats: {
-        shotsFired: number;
-        enemiesSpawned: number;
-    };
-    sc: {
-        assetBase: string;
-        audio: AudioManager;
-        input: InputManager;
-        assets: AssetManager;
-    };
-}
+export type { BoundsContext, GameContext, PlayerInputState };
 
 /**
  * 全エンティティの基底クラス

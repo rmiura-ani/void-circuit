@@ -17,15 +17,6 @@ import {
     type EnemySpawnData
 } from '../enemy.js';
 
-export interface Stage6GameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-    } | null;
-}
 
 // ==========================================
 // 1. STAGE-6 固有のザコ・中型敵クラス群
@@ -41,11 +32,11 @@ export class OrbitInterceptorEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_orbit_interceptor.webp"; }
 
-    constructor(game: Stage6GameContext, bulletType: BulletType = 'triple', hp: number = 2) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'triple', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.stateTimer++;
 
@@ -83,7 +74,7 @@ export class OrbitInterceptorEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -101,11 +92,11 @@ export class HeatArmorEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_heat_armor.webp"; }
 
-    constructor(game: Stage6GameContext, bulletType: BulletType = 'straight', hp: number = 6) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'straight', hp: number = 6) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -113,7 +104,7 @@ export class HeatArmorEnemy extends Enemy {
     }
 
     /** 正面耐熱装甲：自機が正面（幅±20px以内）から攻撃した場合は無効化 */
-    public override takeDamage(game: Stage6GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext , amount: number): boolean {
         if (game.player) {
             const playerX = game.player.x + game.player.width / 2;
             const myX = this.x + this.width / 2;
@@ -125,7 +116,7 @@ export class HeatArmorEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -143,11 +134,11 @@ export class HomingPodEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_homing_pod.webp"; }
 
-    constructor(game: Stage6GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -155,7 +146,7 @@ export class HomingPodEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -173,13 +164,13 @@ export class BeamCruiserEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_beam_cruiser.webp"; }
 
-    constructor(game: Stage6GameContext, bulletType: BulletType = 'triple', hp: number = 8) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'triple', hp: number = 8) {
         super(game, bulletType, hp);
         this.width = 80;
         this.height = 48;
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -187,7 +178,7 @@ export class BeamCruiserEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -206,7 +197,7 @@ export class BurnerDroneEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_burner_drone.webp"; }
 
-    constructor(game: Stage6GameContext, bulletType: BulletType = 'straight', hp: number = 3) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'straight', hp: number = 3) {
         super(game, bulletType, hp);
     }
 
@@ -215,7 +206,7 @@ export class BurnerDroneEnemy extends Enemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -227,7 +218,7 @@ export class BurnerDroneEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -251,7 +242,7 @@ export class BossEnemy_06 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_06.webp"; }
 
     constructor(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         hp: number = 120,
         timeLimit?: number,
         timeMultiplier?: number
@@ -270,7 +261,7 @@ export class BossEnemy_06 extends BossEnemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage6GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -327,7 +318,7 @@ export class BossEnemy_06 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage6GameContext,
+        game: EnemyGameContext ,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

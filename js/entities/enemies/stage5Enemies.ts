@@ -18,20 +18,6 @@ import {
     type BossHitboxPart
 } from '../enemy.js';
 
-export interface Stage5PlayerLike {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    alive?: boolean;
-    suctionForceX?: number;
-    suctionForceY?: number;
-}
-
-export interface Stage5GameContext extends EnemyGameContext {
-    player?: Stage5PlayerLike | null;
-}
-
 interface SuctionParticle {
     angle: number;
     maxDistance: number;
@@ -61,13 +47,13 @@ export class CellMiniEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_cell_mini.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = 20;
         this.height = 20;
     }
 
-    public override update(_game: Stage5GameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
         this.x += this.vx;
         this.y += this.vy;
@@ -77,7 +63,7 @@ export class CellMiniEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -97,19 +83,19 @@ export class CellMitosisEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_cell_mitosis.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 2) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'none', hp: number = 2) {
         super(game, bulletType, hp);
         this.width = (220 / 111) * 32;
         this.height = 32;
     }
 
-    public override update(_game: Stage5GameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
     }
 
     /** 撃破時に2体に「細胞分裂」して左右へ弾き出す */
-    public override takeDamage(game: Stage5GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext, amount: number): boolean {
         if (!this.active) return false;
 
         // ダメージを受けて死亡する前の正確な中心座標をあらかじめ保持
@@ -134,7 +120,7 @@ export class CellMitosisEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -154,12 +140,12 @@ export class PulseSporeEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_pulse_spore.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'eight-way', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'eight-way', hp: number = 1) {
         super(game, bulletType, hp);
         this.timer = game.random.range(0, 60);
     }
 
-    public override update(game: Stage5GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer += 0.08;
         this.y += this.speedY;
@@ -188,7 +174,7 @@ export class PulseSporeEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -208,7 +194,7 @@ export class BioTentacleEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_bio_tentacle.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'aim', hp: number = 4) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 4) {
         super(game, bulletType, hp);
         this.width = (461 / 133) * 32;
         this.height = 32;
@@ -219,7 +205,7 @@ export class BioTentacleEnemy extends Enemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage5GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer += 0.05;
 
@@ -232,7 +218,7 @@ export class BioTentacleEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -250,13 +236,13 @@ export class LeechParasiteEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_leech_parasite.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = (250 / 123) * 32;
         this.height = 32;
     }
 
-    public override update(game: Stage5GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         // 常に自機の中心をジワジワ狙う誘導移動
@@ -273,7 +259,7 @@ export class LeechParasiteEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -294,7 +280,7 @@ export class HeartNucleusEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_heart_nucleus.webp"; }
 
-    constructor(game: Stage5GameContext, bulletType: BulletType = 'eight-way', hp: number = 7) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'eight-way', hp: number = 7) {
         super(game, bulletType, hp);
         this.width = 48;
         this.height = 48;
@@ -312,7 +298,7 @@ export class HeartNucleusEnemy extends Enemy {
         }
     }
 
-    private _applySuctionToPlayer(game: Stage5GameContext): void {
+    private _applySuctionToPlayer(game: EnemyGameContext): void {
         if (!game.player) return;
 
         const enemyCenterX = this.x + this.width / 2;
@@ -334,7 +320,7 @@ export class HeartNucleusEnemy extends Enemy {
         }
     }
 
-    public override update(game: Stage5GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -430,7 +416,7 @@ export class HeartNucleusEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -456,7 +442,7 @@ export class BossEnemy_05 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_05.webp"; }
 
     constructor(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         hp: number = 900,
         timeLimit?: number,
         timeMultiplier?: number
@@ -506,7 +492,7 @@ export class BossEnemy_05 extends BossEnemy {
         ];
     }
 
-    public override update(game: Stage5GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -566,7 +552,7 @@ export class BossEnemy_05 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage5GameContext,
+        game: EnemyGameContext,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

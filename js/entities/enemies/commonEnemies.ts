@@ -17,17 +17,6 @@ import {
     type EnemySpawnData
 } from '../enemy.js';
 
-export interface CommonEnemyGameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-        windForceX?: number;
-    } | null;
-}
-
 export interface WindParticle {
     x: number;
     y: number;
@@ -47,7 +36,7 @@ export class StraightEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_straight.webp"; }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         // 直進移動
@@ -58,7 +47,7 @@ export class StraightEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -78,7 +67,7 @@ export class SineEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_sine.webp"; }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         // サイン波移動 (setStartPosition で記憶した startX を基準に揺らす)
@@ -90,7 +79,7 @@ export class SineEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -113,7 +102,7 @@ export class ScoutEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_scout.webp"; }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.timer += 0.04;
@@ -130,7 +119,7 @@ export class ScoutEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -155,12 +144,12 @@ export class StationaryEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_stationary.webp"; }
 
-    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
         this.baseShootInterval = 30;
     }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -191,7 +180,7 @@ export class StationaryEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -215,7 +204,7 @@ export class AssaultEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_assault.webp"; }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.x += this.vx;
@@ -235,7 +224,7 @@ export class AssaultEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -253,12 +242,12 @@ export class HunterEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_hunter.webp"; }
 
-    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
         this.baseShootInterval = 80;
     }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -277,7 +266,7 @@ export class HunterEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -294,16 +283,16 @@ export class ShieldEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_shield.webp"; }
 
-    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 5) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 5) {
         super(game, bulletType, hp);
     }
 
-    public override update(_game: CommonEnemyGameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
     }
 
-    public override takeDamage(game: CommonEnemyGameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext, amount: number): boolean {
         const isDead = super.takeDamage(game, amount);
         if (!isDead && game) {
             game.entities.push(
@@ -314,7 +303,7 @@ export class ShieldEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -335,7 +324,7 @@ export class GaleArtilleryEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_gale_artillery.webp"; }
 
-    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'triple', hp: number = 4) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'triple', hp: number = 4) {
         super(game, bulletType, hp);
         this.width = 160;
         this.height = (155 / 291) * 160;
@@ -350,7 +339,7 @@ export class GaleArtilleryEnemy extends Enemy {
         }));
     }
 
-    public override update(game: CommonEnemyGameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -409,7 +398,7 @@ export class GaleArtilleryEnemy extends Enemy {
     }
 
     public static override create(
-        game: CommonEnemyGameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

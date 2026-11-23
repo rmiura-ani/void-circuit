@@ -18,17 +18,6 @@ import {
     type BossHitboxPart
 } from '../enemy.js';
 
-export interface Stage3GameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-    } | null;
-}
-
-
 // ==========================================
 // 1. STAGE-3 固有のザコ・中型敵クラス群
 // ==========================================
@@ -43,7 +32,7 @@ export class WindSlicerEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_wind_slicer.webp"; }
 
-    constructor(game: Stage3GameContext, bulletType: BulletType = 'straight', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'straight', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = 40;
         this.height = (157 / 241) * 40;
@@ -55,7 +44,7 @@ export class WindSlicerEnemy extends Enemy {
         this.speedX = isLeftToRight ? 7.0 : -7.0;
     }
 
-    public override update(game: Stage3GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.x += this.speedX;
@@ -94,7 +83,7 @@ export class WindSlicerEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -124,11 +113,11 @@ export class CloudLurkerEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_cloud_lurker.webp"; }
 
-    constructor(game: Stage3GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage3GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speed;
@@ -156,7 +145,7 @@ export class CloudLurkerEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -175,13 +164,13 @@ export class SkyFalconEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_sky_falcon.webp"; }
 
-    constructor(game: Stage3GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
         this.width = 32;
         this.height = (155 / 135) * 32;
     }
 
-    public override update(game: Stage3GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -220,7 +209,7 @@ export class SkyFalconEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -238,13 +227,13 @@ export class AegisCruiserEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_aegis_cruiser.webp"; }
 
-    constructor(game: Stage3GameContext, bulletType: BulletType = 'eight-way', hp: number = 8) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'eight-way', hp: number = 8) {
         super(game, bulletType, hp);
         this.width = (250 / 183) * 64;
         this.height = 64;
     }
 
-    public override update(game: Stage3GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -254,7 +243,7 @@ export class AegisCruiserEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -278,7 +267,7 @@ export class BossEnemy_03 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_03.webp"; }
 
     constructor(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         hp: number = 700,
         timeLimit?: number,
         timeMultiplier?: number
@@ -308,7 +297,7 @@ export class BossEnemy_03 extends BossEnemy {
         ];
     }
 
-    public override update(game: Stage3GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -364,7 +353,7 @@ export class BossEnemy_03 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage3GameContext,
+        game: EnemyGameContext,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

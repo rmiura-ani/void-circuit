@@ -8,71 +8,27 @@
  * Note: Included assets are the property of their respective owners.
  */
 
-import { Entity, type BoundsContext, type GameContext } from './base.js';
-import type { EnemyLike } from '../game-collision.js';
+import { Entity } from './base.js';
+import type {
+    BossHitboxPart,
+    BoundsContext,
+    BulletType,
+    EnemyConstructor,
+    EnemyGameContext,
+    EnemyLike,
+    EnemySpawnData,
+    GameContext,
+    HitboxPartName
+} from '../types/entities.js';
 
-export type BulletType =
-    | 'none'
-    | 'straight'
-    | 'twin'
-    | 'triple'
-    | 'parallel-3'
-    | 'ring-6'
-    | 'eight-way'
-    | 'ring-8'
-    | 'ring-12'
-    | 'cross'
-    | 'wave'
-    | 'aim'
-    | 'ring'
-    | 'cluster'
-    | (string & {});
-
-export interface EnemySpawnData {
-    frame?: number;
-    type?: string;
-    from?: string;
-    dir?: string;
-    x?: number;
-    y?: number;
-    hp?: number;
-    bulletType?: BulletType;
-    timeLimit?: number;
-    timeMultiplier?: number;
-    [key: string]: unknown;
-}
-
-/** Enemy / BossEnemy が参照する Game のインターフェース */
-export interface EnemyGameContext extends GameContext {
-    bulletSpeedMultiplier?: number;
-    assets?: GameContext['sc']['assets'];
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-    } | null;
-    collisions?: {
-        createExplosion(x: number, y: number, enemy: EnemyLike, soundoff?: boolean): void;
-    };
-}
-
-/** レジストリに登録される敵クラスのコンストラクタ型 */
-export interface EnemyConstructor {
-    create(game: EnemyGameContext, bType?: BulletType, hp?: number, data?: EnemySpawnData): Enemy;
-}
-
-export type HitboxPartName = 'HEAD' | 'BODY' | 'CORE' | 'ARM' | (string & {});
-
-export interface BossHitboxPart {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    multiplier: number;
-    part: HitboxPartName;
-}
-
+export type {
+    BossHitboxPart,
+    BulletType,
+    EnemyConstructor,
+    EnemyGameContext,
+    EnemySpawnData,
+    HitboxPartName
+};
 
 // ==========================================
 // 1. 全敵クラス動的自動登録レジストリ (ENEMY_REGISTRY)

@@ -1,20 +1,15 @@
 /*
-- PROJECT: VOID-CIRCUIT
+ * PROJECT: VOID-CIRCUIT
  *
-- config.ts
-- 
-- Copyright (c) 2026 あに。部長 / Ryo Miura
-- Licensed under the MIT License (see LICENSE file)
-- Note: Included assets are the property of their respective owners.
+ * config/config.ts - BIOS風設定画面・ゲームオプション管理
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
  */
 
-import {
-    SoundTestManager,
-    type EQSettings,
-    type SoundTestAudioLike,
-    type SoundTestControllerLike
-} from './soundTest.js';
-import type { ConfigManagerLike } from '../controller.js';
+import { SoundTestManager } from './soundTest.js';
+import type { ConfigControllerLike, ConfigManagerLike } from '../types/config.js';
 
 export type ExtendOption = readonly [number] | readonly [number, number] | 'NONE';
 
@@ -36,29 +31,6 @@ export const CONFIG_OPTIONS = {
 export type DifficultyLevel = (typeof CONFIG_OPTIONS.difficulty)[number];
 export type LivesOption = (typeof CONFIG_OPTIONS.lives)[number];
 
-export interface ConfigAudioLike extends SoundTestAudioLike {
-    seVolume?: number;
-    bgmVolume?: number;
-    bgmCount?: number;
-    setSEVolume?: (vol: number) => void;
-    setBGMVolume?: (vol: number) => void;
-    getSEName(index: number): string;
-    getBGMName(index: number): string;
-    getRoomPresetName?: (index: number) => string;
-    playHitSound(): void;
-    playExplosion(): void;
-    playPowerUp(): void;
-}
-
-export interface ConfigControllerLike extends SoundTestControllerLike {
-    audio: ConfigAudioLike;
-    input?: {
-        clearTriggers(): void;
-    };
-    resetHighScore(): void;
-    visualEffectWarning?: () => void;
-}
-
 /** 配列内の選択肢を前後循環するヘルパー */
 function cycleOption<T>(opts: readonly [T, ...T[]], current: T, isRight: boolean): T {
     const idx = opts.indexOf(current);
@@ -70,7 +42,7 @@ function cycleOption<T>(opts: readonly [T, ...T[]], current: T, isRight: boolean
 }
 
 /**
-- 設定画面（BIOS風）を管理するクラス
+ * 設定画面（BIOS風）を管理するクラス
  */
 export class ConfigManager implements ConfigManagerLike {
     public sc: ConfigControllerLike;
@@ -92,13 +64,10 @@ export class ConfigManager implements ConfigManagerLike {
     public items: HTMLElement[] = [];
     public resetConfirmed: boolean = false;
 
-    private eqCtx: CanvasRenderingContext2D | null = null;
-    private loopId: number | null = null;
-
     constructor(sc: ConfigControllerLike) {
         this.sc = sc;
 
-        this.soundTest = new SoundTestManager(sc);
+        this.soundTest = new SoundTestManager(sc.audio, sc.assetBase ?? '');
         this.soundTest.onIndexChanged = () => this.refreshAllDisplay();
 
         this.difficulty = this.OPTIONS.difficulty[1];
@@ -115,23 +84,16 @@ export class ConfigManager implements ConfigManagerLike {
 
         // 先にデータを構築して画面の裏でリストを確定させる
         this.items = Array.from(document.querySelectorAll<HTMLElement>('.config-item'));
-        await this.soundTest.buildDynamicSoundTestList();
+        await this.soundTest.activate(() => this.isMode);
 
         // 表示される前に描画を一度走らせ、最初から正しい行間にしておく
         this.refreshAllDisplay();
         this.updateSelection();
         this.setupMouseEvents();
-        this.soundTest.setupAudioEndedListener(() => this.isMode);
 
         // すべての準備が整ってから画面を表示
         if (this.startScreenEl) this.startScreenEl.style.display = 'none';
         if (this.screenEl) this.screenEl.style.display = 'flex';
-
-        const eqCanvas = document.getElementById('eq-overlay-canvas') as HTMLCanvasElement | null;
-        if (eqCanvas) {
-            this.eqCtx = eqCanvas.getContext('2d');
-            this.startLoop();
-        }
     }
 
     /** 設定画面を閉じる */
@@ -139,25 +101,12 @@ export class ConfigManager implements ConfigManagerLike {
         this.isMode = false;
         if (this.screenEl) {
             this.screenEl.style.display = 'none';
-            this.screenEl.classList.remove('bgm-testing-mode');
         }
         if (this.startScreenEl) {
             this.startScreenEl.style.display = 'flex';
         }
 
-        // オーディオを破棄する前に描画ループを完全に止める
-        if (this.loopId !== null) {
-            cancelAnimationFrame(this.loopId);
-            this.loopId = null;
-        }
-
-        this.soundTest.stopAndReset();
-
-        const eqContainer = document.getElementById('eq-container');
-        if (eqContainer) {
-            eqContainer.style.opacity = '0';
-            eqContainer.style.display = 'none';
-        }
+        this.soundTest.deactivate(this.screenEl);
 
         // 画面外クリックが残るのでリセット
         this.sc.input?.clearTriggers();
@@ -224,34 +173,8 @@ export class ConfigManager implements ConfigManagerLike {
             this.lives = cycleOption(this.OPTIONS.lives, this.lives, isRight);
         } else if (setting === 'extend') {
             this.extend = cycleOption(this.OPTIONS.extend, this.extend, isRight);
-        } else if (setting === 'se_vol' && this.sc.audio) {
-            let vol = this.sc.audio.seVolume ?? 0.8;
-            vol = isRight ? vol + 0.1 : vol - 0.1;
-
-            if (vol > 1.05) vol = 0.0;
-            if (vol < -0.05) vol = 1.0;
-            vol = Math.max(0, Math.min(1, Math.round(vol * 10) / 10));
-
-            this.sc.audio.seVolume = vol;
-            this.sc.audio.setSEVolume?.(vol);
-        } else if (setting === 'bgm_vol' && this.sc.audio) {
-            let vol = this.sc.audio.bgmVolume ?? 0.7;
-            vol = isRight ? vol + 0.1 : vol - 0.1;
-
-            if (vol > 1.05) vol = 0.0;
-            if (vol < -0.05) vol = 1.0;
-            vol = Math.max(0, Math.min(1, Math.round(vol * 10) / 10));
-
-            this.sc.audio.bgmVolume = vol;
-            this.sc.audio.setBGMVolume?.(vol);
-        } else if (setting === 'sound') {
-            this.soundTest.changeSEIndex(isRight);
-        } else if (setting === 'bgm') {
-            this.soundTest.changeBGMIndex(isRight);
-        } else if (setting === 'audio_room') {
-            this.soundTest.changeRoomPresetIndex(isRight);
-        } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
-            this.soundTest.changeEQGain(setting, isRight);
+        } else if (this.soundTest.handlesSetting(setting)) {
+            this.soundTest.handleValueChange(setting, isRight);
         }
 
         this.refreshDisplay(item);
@@ -264,7 +187,7 @@ export class ConfigManager implements ConfigManagerLike {
         const setting = item.dataset['setting'];
 
         if (setting === 'sound') this.soundTest.playSE();
-        if (setting === 'bgm') this.toggleBGMAndTransform();
+        if (setting === 'bgm') this.soundTest.toggleBGMWithUI(this.screenEl);
 
         if (setting === 'reset_score') {
             if (!this.resetConfirmed) {
@@ -298,7 +221,6 @@ export class ConfigManager implements ConfigManagerLike {
         const setting = item.dataset['setting'];
         const valEl = item.querySelector<HTMLElement>('.value');
         if (!valEl) return;
-        const audio = this.sc.audio;
 
         const wrapArrows = (text: string | number): string => {
             const btnStyle = [
@@ -334,37 +256,8 @@ export class ConfigManager implements ConfigManagerLike {
                 }
             }
             valEl.innerHTML = wrapArrows(displayVal);
-        } else if (setting === 'se_vol') {
-            const vol = audio ? Math.round((audio.seVolume ?? 0.8) * 100) : 80;
-            const txt = vol === 0 ? 'MUTED' : vol === 100 ? 'MAX' : `${vol}%`;
-            valEl.innerHTML = wrapArrows(txt);
-        } else if (setting === 'bgm_vol') {
-            const vol = audio ? Math.round((audio.bgmVolume ?? 0.7) * 100) : 70;
-            const txt = vol === 0 ? 'MUTED' : vol === 100 ? 'MAX' : `${vol}%`;
-            valEl.innerHTML = wrapArrows(txt);
-        } else if (setting === 'sound') {
-            valEl.innerHTML = wrapArrows(audio ? audio.getSEName(this.soundTest.soundTestIndex) : '---');
-        } else if (setting === 'bgm') {
-            const titleEl = document.querySelector<HTMLElement>('.bgm-title');
-            if (!audio || (audio.bgmCount ?? 0) === 0) {
-                valEl.innerHTML = wrapArrows('LOADING...');
-                if (titleEl) titleEl.innerText = 'Please wait...';
-            } else {
-                const bgmID = `STAGE-${this.soundTest.bgmTestIndex + 1}`;
-                valEl.innerHTML = wrapArrows(bgmID);
-                if (titleEl) titleEl.innerText = audio.getBGMName(this.soundTest.bgmTestIndex);
-            }
-        } else if (setting === 'audio_room') {
-            if (!audio || !audio.getRoomPresetName) {
-                valEl.innerHTML = wrapArrows('NOT READY');
-            } else {
-                valEl.innerHTML = wrapArrows(audio.getRoomPresetName(this.soundTest.roomPresetIndex));
-            }
-        } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
-            const targetBand = setting.replace('eq_', '') as keyof EQSettings;
-            const val = audio?.eqSettings ? audio.eqSettings[targetBand] : 0;
-            const sign = val > 0 ? '+' : '';
-            valEl.innerHTML = wrapArrows(`${sign}${val} dB`);
+        } else if (this.soundTest.handlesSetting(setting)) {
+            valEl.innerHTML = wrapArrows(this.soundTest.getDisplayValue(setting));
         }
     }
 
@@ -395,26 +288,19 @@ export class ConfigManager implements ConfigManagerLike {
                     this.handleValueChange(isRightArrow);
                     this.sc.audio?.playHitSound();
                     if (setting === 'sound') this.soundTest.playSE();
+                } else if (setting === 'bgm') {
+                    this.soundTest.toggleBGMWithUI(this.screenEl);
+                    this.refreshDisplay(item);
+                } else if (
+                    setting === 'difficulty' ||
+                    setting === 'lives' ||
+                    setting === 'extend' ||
+                    (this.soundTest.handlesSetting(setting) && setting !== 'sound')
+                ) {
+                    this.handleValueChange(true);
+                    this.sc.audio?.playHitSound();
                 } else {
-                    if (setting === 'bgm') {
-                        this.toggleBGMAndTransform();
-                        this.refreshDisplay(item);
-                    } else if (setting === 'eq_low' || setting === 'eq_mid' || setting === 'eq_high') {
-                        this.handleValueChange(true);
-                        this.sc.audio?.playHitSound();
-                    } else if (
-                        setting === 'difficulty' ||
-                        setting === 'lives' ||
-                        setting === 'extend' ||
-                        setting === 'audio_room' ||
-                        setting === 'se_vol' ||
-                        setting === 'bgm_vol'
-                    ) {
-                        this.handleValueChange(true);
-                        this.sc.audio?.playHitSound();
-                    } else {
-                        this.handleAction();
-                    }
+                    this.handleAction();
                 }
             };
 
@@ -427,32 +313,6 @@ export class ConfigManager implements ConfigManagerLike {
                 }
             };
         });
-    }
-
-    /** BGMテスト再生制御 */
-    public toggleBGMAndTransform(): void {
-        this.soundTest.toggleBGM(() => this.showEqualizerContainer());
-
-        if (this.soundTest.isBGMPlaying) {
-            this.screenEl?.classList.add('bgm-testing-mode');
-        } else {
-            this.screenEl?.classList.remove('bgm-testing-mode');
-            const eqContainer = document.getElementById('eq-container');
-            if (eqContainer) {
-                eqContainer.style.opacity = '0';
-                eqContainer.style.display = 'none';
-            }
-        }
-    }
-
-    public showEqualizerContainer(): void {
-        const eqContainer = document.getElementById('eq-container');
-        if (eqContainer) {
-            eqContainer.style.display = 'block';
-            setTimeout(() => {
-                eqContainer.style.opacity = '1';
-            }, 10);
-        }
     }
 
     public cancelResetConfirm(): void {
@@ -538,13 +398,5 @@ export class ConfigManager implements ConfigManagerLike {
         } catch (e) {
             console.error('Config corruption detected. Resetting to defaults.', e);
         }
-    }
-
-    public startLoop(): void {
-        if (!this.isMode || !this.eqCtx) return;
-        const currentItem = this.items[this.currentIndex];
-        const currentSetting = currentItem ? currentItem.dataset['setting'] : '';
-        this.soundTest.drawEqualizer(this.eqCtx, 0, 0, currentSetting);
-        this.loopId = requestAnimationFrame(() => this.startLoop());
     }
 }

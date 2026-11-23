@@ -18,19 +18,6 @@ import {
     type EnemySpawnData
 } from '../enemy.js';
 
-export interface Stage2GameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-    } | null;
-    collisions?: {
-        createExplosion(x: number, y: number, opts?: { maxHp?: number }): void;
-    };
-}
-
 // ==========================================
 // 1. STAGE-2 固有のザコ・中型敵クラス群
 // ==========================================
@@ -46,7 +33,7 @@ export class AquaJetEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_aqua_jet.webp"; }
 
-    constructor(game: Stage2GameContext, bulletType: BulletType = 'aim', hp: number = 1) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = (541 / 1247) * 32;
         this.height = 40;
@@ -57,7 +44,7 @@ export class AquaJetEnemy extends Enemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage2GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -73,7 +60,7 @@ export class AquaJetEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -93,13 +80,13 @@ export class WaveSpreaderEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_wave_spreader.webp"; }
 
-    constructor(game: Stage2GameContext, bulletType: BulletType = 'triple', hp: number = 3) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'triple', hp: number = 3) {
         super(game, bulletType, hp);
         this.width = (1408 / 768) * 32;
         this.height = 32;
     }
 
-    public override update(game: Stage2GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -134,7 +121,7 @@ export class WaveSpreaderEnemy extends Enemy {
     }
 
     /** 波紋（Wave）を模した拡散弾 */
-    public shootWaveBullet(game: Stage2GameContext): void {
+    public shootWaveBullet(game: EnemyGameContext ): void {
         const bx = this.x + this.width / 2;
         const by = this.y + this.height / 2;
         const baseAngle = Math.PI / 2; // 真下方向
@@ -148,7 +135,7 @@ export class WaveSpreaderEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -169,7 +156,7 @@ export class BubbleMineEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_bubble_mine.webp"; }
 
-    constructor(game: Stage2GameContext, bulletType: BulletType = 'none', hp: number = 1) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
         this.timer = game.random.range(0, 100);
     }
@@ -179,7 +166,7 @@ export class BubbleMineEnemy extends Enemy {
         this.baseX = x;
     }
 
-    public override update(_game: Stage2GameContext): void {
+    public override update(_game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer += 0.05;
 
@@ -190,7 +177,7 @@ export class BubbleMineEnemy extends Enemy {
     }
 
     /** 破壊時に泡（弾）を周囲に飛び散らせる */
-    public override takeDamage(game: Stage2GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext , amount: number): boolean {
         const isDead = super.takeDamage(game, amount);
         if (isDead && game) {
             this.popBubbleCluster(game);
@@ -198,7 +185,7 @@ export class BubbleMineEnemy extends Enemy {
         return isDead;
     }
 
-    public popBubbleCluster(game: Stage2GameContext): void {
+    public popBubbleCluster(game: EnemyGameContext ): void {
         const bx = this.x + this.width / 2;
         const by = this.y + this.height / 2;
 
@@ -212,7 +199,7 @@ export class BubbleMineEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -237,7 +224,7 @@ export class VortexDiverEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_vortex_diver.webp"; }
 
-    constructor(game: Stage2GameContext, bulletType: BulletType = 'straight', hp: number = 2) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'straight', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
@@ -247,7 +234,7 @@ export class VortexDiverEnemy extends Enemy {
         this.swirlCenterY = y;
     }
 
-    public override update(game: Stage2GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -314,7 +301,7 @@ export class VortexDiverEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -333,13 +320,13 @@ export class CoralShieldEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_coral_shield.webp"; }
 
-    constructor(game: Stage2GameContext, bulletType: BulletType = 'straight', hp: number = 6) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'straight', hp: number = 6) {
         super(game, bulletType, hp);
         this.width = 48;
         this.height = (1408 / 768) * 48;
     }
 
-    public override update(game: Stage2GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -357,7 +344,7 @@ export class CoralShieldEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -375,22 +362,22 @@ export class MineDebrisEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_mine_debris.webp"; }
 
-    constructor(game: Stage2GameContext, _bulletType: BulletType = 'none', _hp: number = Infinity) {
+    constructor(game: EnemyGameContext , _bulletType: BulletType = 'none', _hp: number = Infinity) {
         super(game, 'none', Infinity);
     }
 
-    public override update(_game: Stage2GameContext): void {
+    public override update(_game: EnemyGameContext ): void {
         if (!this.active) return;
         this.y += this.speedY;
     }
 
-    public override takeDamage(_game: Stage2GameContext, _amount: number): boolean {
+    public override takeDamage(_game: EnemyGameContext , _amount: number): boolean {
         // 完全無敵
         return false;
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         _bType?: BulletType,
         _hp?: number,
         data: EnemySpawnData = {}
@@ -418,7 +405,7 @@ export class BossEnemy_02 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_02.webp"; }
 
     constructor(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         hp: number = 50,
         timeLimit?: number,
         timeMultiplier?: number
@@ -437,7 +424,7 @@ export class BossEnemy_02 extends BossEnemy {
         this.baseX = this.startX;
     }
 
-    public override update(game: Stage2GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -525,7 +512,7 @@ export class BossEnemy_02 extends BossEnemy {
         ctx.restore();
     }
 
-    public override onDie(game: Stage2GameContext): void {
+    public override onDie(game: EnemyGameContext ): void {
         // 水中母艦が水圧と爆破で崩壊していく連鎖大爆発演出
         for (let i = 0; i < 8; i++) {
             setTimeout(() => {
@@ -539,7 +526,7 @@ export class BossEnemy_02 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage2GameContext,
+        game: EnemyGameContext ,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

@@ -17,16 +17,6 @@ import {
     type EnemySpawnData
 } from '../enemy.js';
 
-export interface Stage7GameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-    } | null;
-}
-
 // ==========================================
 // 1. STAGE-7 固有のザコ・中型敵クラス群
 // ==========================================
@@ -42,11 +32,11 @@ export class CircuitWalkerEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_circuit_walker.webp"; }
 
-    constructor(game: Stage7GameContext, bulletType: BulletType = 'none', hp: number = 2) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'none', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage7GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -67,7 +57,7 @@ export class CircuitWalkerEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage7GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -87,14 +77,14 @@ export class VoidBitEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_void_bit.webp"; }
 
-    constructor(game: Stage7GameContext, bulletType: BulletType = 'aim', hp: number = 1) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = 24;
         this.height = 24;
         this.angle = game.random.angle();
     }
 
-    public override update(game: Stage7GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
         this.angle += 0.04; // 円周運動
@@ -118,7 +108,7 @@ export class VoidBitEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage7GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -136,13 +126,13 @@ export class GateKeeperEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_gate_keeper.webp"; }
 
-    constructor(game: Stage7GameContext, bulletType: BulletType = 'eight-way', hp: number = 8) {
+    constructor(game: EnemyGameContext , bulletType: BulletType = 'eight-way', hp: number = 8) {
         super(game, bulletType, hp);
         this.width = (528 / 312) * 48;
         this.height = 48;
     }
 
-    public override update(game: Stage7GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
 
         this.y += 0.3; // 非常にゆっくり下降
@@ -156,7 +146,7 @@ export class GateKeeperEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage7GameContext,
+        game: EnemyGameContext ,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -186,7 +176,7 @@ export class BossEnemy_07 extends BossEnemy {
     }
 
     constructor(
-        game: Stage7GameContext,
+        game: EnemyGameContext ,
         hp: number = 150,
         timeLimit?: number,
         timeMultiplier?: number
@@ -204,7 +194,7 @@ export class BossEnemy_07 extends BossEnemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage7GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.timer++;
 
@@ -281,7 +271,7 @@ export class BossEnemy_07 extends BossEnemy {
     }
 
     /** 変形演出中（isInvincible = true）はすべての被ダメージを無効化 */
-    public override takeDamage(game: Stage7GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext , amount: number): boolean {
         if (this.isInvincible) return false;
         return super.takeDamage(game, amount);
     }
@@ -301,7 +291,7 @@ export class BossEnemy_07 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage7GameContext,
+        game: EnemyGameContext ,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

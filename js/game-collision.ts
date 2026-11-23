@@ -7,79 +7,28 @@
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-
-import { Entity, type GameContext } from './entities/base.js';
-import { Player, Bullet } from './entities/player.js';
-import { Enemy, EnemyBullet, type HitboxPartName } from './entities/enemy.js';
+import { Entity } from './entities/base.js';
+import { Bullet } from './entities/player.js';
+import { Enemy, EnemyBullet } from './entities/enemy.js';
 import { ScoreText, Particle } from './entities/effects.js';
+import type {
+    CollidableRect,
+    EnemyLike,
+    ExplosionTargetLike,
+    GameCollisionContext,
+    Hitbox,
+    HitResult,
+    PlayerBulletLike
+} from './types/entities.js';
 
-export interface Hitbox {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    multiplier: number;
-    part: HitboxPartName;
-}
-
-export interface HitResult {
-    hit: boolean;
-    multiplier: number;
-    part?: HitboxPartName;
-}
-
-export interface CollidableRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    hitWidth?: number;
-    hitHeight?: number;
-}
-
-export interface PlayerBulletLike extends Bullet {
-    damage?: number;
-    hitWidth?: number;
-    hitHeight?: number;
-}
-
-export interface EnemyLike extends Entity {
-    isInvincible?: boolean;
-    isBoss?: boolean;
-    maxHp?: number;
-    timeLimit?: number;
-    hitWidth?: number;
-    hitHeight?: number;
-    getHitboxes?: () => Hitbox[];
-    takeDamage(game: GameCollisionContext, damage: number): boolean;
-    onDie?: (game: GameCollisionContext, silent?: boolean) => void;
-}
-
-/** GameCollisionManager が参照する Game のインターフェース */
-export interface GameCollisionContext extends GameContext {
-    player: Player;
-    uiHeaderHeight: number;
-    score: number;
-    frame: number;
-    bossStartTime: number;
-    stats: {
-        shotsFired: number;
-        shotsHit: number;
-        enemiesSpawned: number;
-        enemiesKilled: number;
-    };
-    scenario: {
-        skipToAfterLoop(): void;
-    };
-    sc: GameContext['sc'] & {
-        audio: GameContext['sc']['audio'] & {
-            playCriticalHit?: () => void;
-            playHitSound(): void;
-            playExplosion(): void;
-        };
-    };
-    onPlayerMiss(): void;
-}
+export type {
+    CollidableRect,
+    EnemyLike,
+    GameCollisionContext,
+    Hitbox,
+    HitResult,
+    PlayerBulletLike
+};
 
 export class GameCollisionManager {
     public game: GameCollisionContext;
@@ -312,7 +261,7 @@ export class GameCollisionManager {
         }
     }
 
-    public createExplosion(x: number, y: number, enemy: EnemyLike, soundoff: boolean = false): void {
+    public createExplosion(x: number, y: number, enemy: ExplosionTargetLike, soundoff: boolean = false): void {
         const hp = enemy.maxHp || 1;
 
         // パーティクル数に上限（キャップ）を設ける（最大60個程度に抑える）

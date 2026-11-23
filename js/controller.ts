@@ -11,60 +11,21 @@
 import { InputManager } from './systems/input.js';
 import { AudioManager } from './systems/audio.js';
 import { ConfigManager } from './config/config.js';
-import type { DifficultyLevel, ExtendOption, LivesOption } from './config/config.js';
 import { ReplayUIManager } from './systems/replay-ui.js';
 import { Game } from './game.js';
+import type { ConfigManagerLike } from './types/config.js';
+import type {
+    ControlInputType,
+    GameInstanceLike,
+    ReplayUIManagerLike
+} from './types/system.js';
 
-declare const __APP_VERSION__: string;
-
-export type ControlInputType = 'MOUSE' | 'KEYBOARD';
-
-/** Game インスタンスの契約インターフェース（game.ts 移行時の設計指針） */
-export interface GameInstanceLike {
-    isRunning: boolean;
-    score: number;
-    gameOverTimer: number;
-    player?: {
-        alive: boolean;
-    } | null;
-    stats: {
-        enemiesSpawned: number;
-        enemiesKilled: number;
-        shotsFired: number;
-        shotsHit: number;
-        inputMode?: string;
-    };
-    missionConfig: {
-        missionName: string;
-        difficulty: string;
-        extend: string;
-        lives: number;
-        cheatUsed: boolean;
-    };
-    start(inputType: ControlInputType, stage?: number): void;
-    startReplay(replayData: any, stage: number): void;
-    update(): void;
-    draw(): void;
-    destroy(): void;
-}
-
-/** ConfigManager の契約インターフェース（config.ts 移行時の設計指針） */
-export interface ConfigManagerLike {
-    isMode: boolean;
-    lives: LivesOption;
-    difficulty: DifficultyLevel;
-    extend: ExtendOption;
-    isInvincibleCheat: boolean;
-    loadConfig(): void;
-    open(): void;
-    handleInput(e: KeyboardEvent): void;
-}
-
-/** ReplayUIManager の契約インターフェース（replay-ui.ts 移行時の設計指針） */
-export interface ReplayUIManagerLike {
-    setupUI(): void;
-}
-
+export type {
+    ConfigManagerLike,
+    ControlInputType,
+    GameInstanceLike,
+    ReplayUIManagerLike
+};
 /**
  * SystemController: ゲーム全体のライフサイクル・システム統合管理
  */

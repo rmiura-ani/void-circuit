@@ -17,8 +17,6 @@ import {
     type EnemySpawnData
 } from '../enemy.js';
 
-export type Stage4GameContext = EnemyGameContext;
-
 export interface WormHistoryPoint {
     x: number;
     y: number;
@@ -44,11 +42,11 @@ export class DustScoutEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_dust_scout.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'aim', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -64,7 +62,7 @@ export class DustScoutEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -85,13 +83,13 @@ export class RelicPrismEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_relic_prism.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'cross', hp: number = 3) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'cross', hp: number = 3) {
         super(game, bulletType, hp);
         this.width = 80;
         this.height = 80;
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -122,7 +120,7 @@ export class RelicPrismEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -143,12 +141,12 @@ export class MirageCrawlerEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_mirage_crawler.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
         this.timer = game.random.range(0, 100);
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer += 0.1;
 
@@ -159,7 +157,7 @@ export class MirageCrawlerEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -177,13 +175,13 @@ export class SandPillarEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_sand_pillar.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'none', hp: number = 5) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'none', hp: number = 5) {
         super(game, bulletType, hp);
         this.width = 64;
         this.height = (467 / 394) * 64;
     }
 
-    public override update(_game: Stage4GameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -193,7 +191,7 @@ export class SandPillarEnemy extends Enemy {
         }
     }
 
-    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext, amount: number): boolean {
         const reducedAmount = Math.max(1, Math.floor(amount * 0.5));
         this.hitFlashTimer = 5;
         return super.takeDamage(game, reducedAmount);
@@ -209,7 +207,7 @@ export class SandPillarEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -227,13 +225,13 @@ export class GigaOrbEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_giga_orb.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'twin', hp: number = 10) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'twin', hp: number = 10) {
         super(game, bulletType, hp);
         this.width = (510 / 440) * 48;
         this.height = 48;
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -277,7 +275,7 @@ export class GigaOrbEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         _data: EnemySpawnData = {}
@@ -297,18 +295,18 @@ export class RockEnemy extends Enemy {
 
     public override get imageName(): string { return "enemy_rock.webp"; }
 
-    constructor(game: Stage4GameContext, bulletType: BulletType = 'none', hp: number = 1) {
+    constructor(game: EnemyGameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
     }
 
-    public override update(_game: Stage4GameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
         this.x += this.speedX;
         this.y += this.speedY;
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -332,7 +330,7 @@ export class WormSegment extends Enemy {
     public angle: number = 0;
     public isSubmerged: boolean = false;
 
-    constructor(game: Stage4GameContext, head: WormEnemy, index: number, isTail: boolean = false) {
+    constructor(game: EnemyGameContext, head: WormEnemy, index: number, isTail: boolean = false) {
         const imageKey = isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp";
         super(game, 'none', 1);
 
@@ -349,7 +347,7 @@ export class WormSegment extends Enemy {
         return this.customImageKey || (this.isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp");
     }
 
-    public override update(_game: Stage4GameContext): void {
+    public override update(_game: EnemyGameContext): void {
         if (!this.active) return;
 
         if (this.head?.active) {
@@ -374,7 +372,7 @@ export class WormSegment extends Enemy {
         }
     }
 
-    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext, amount: number): boolean {
         if (this.isSubmerged) return false;
         const isDead = super.takeDamage(game, amount);
         if (isDead && this.head) {
@@ -423,7 +421,7 @@ export class WormEnemy extends Enemy {
     public override get imageName(): string { return "stage-4/enemy_worm_head.webp"; }
 
     constructor(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bulletType: BulletType = 'aim',
         hp: number = 5,
         length: number = WormEnemy.DEFAULT_LENGTH
@@ -453,7 +451,7 @@ export class WormEnemy extends Enemy {
         this.baseX = x;
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer += 0.04;
 
@@ -499,7 +497,7 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
+    public override takeDamage(game: EnemyGameContext, amount: number): boolean {
         if (this.isSubmerged) return false;
         return super.takeDamage(game, amount);
     }
@@ -533,7 +531,7 @@ export class WormEnemy extends Enemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
@@ -559,7 +557,7 @@ export class BossEnemy_04 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_04.webp"; }
 
     constructor(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         hp: number = 800,
         timeLimit?: number,
         timeMultiplier?: number
@@ -587,7 +585,7 @@ export class BossEnemy_04 extends BossEnemy {
         this.points = this._createPatrolPoints();
     }
 
-    public override update(game: Stage4GameContext): void {
+    public override update(game: EnemyGameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -627,7 +625,7 @@ export class BossEnemy_04 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage4GameContext,
+        game: EnemyGameContext,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}

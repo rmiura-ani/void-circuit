@@ -11,29 +11,14 @@
 import {
     BossEnemy,
     EnemyBullet,
-    ENEMY_REGISTRY,
-    type BulletType,
-    type EnemyGameContext,
-    type EnemySpawnData
+    ENEMY_REGISTRY
 } from '../enemy.js';
-
-export interface BossTargetLike {
-    x: number;
-    y: number;
-    width?: number;
-    height?: number;
-    alive?: boolean;
-}
-
-export interface Stage1GameContext extends EnemyGameContext {
-    player?: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        alive?: boolean;
-    } | null;
-}
+import type {
+    BossTargetLike,
+    BulletType,
+    EnemyGameContext,
+    EnemySpawnData
+} from '../../types/entities.js';
 
 // ==========================================
 // 1. STAGE-1 ボス実体
@@ -54,7 +39,7 @@ export class BossEnemy_01 extends BossEnemy {
     public override get imageName(): string { return "enemy_boss_01.webp"; }
 
     constructor(
-        game: Stage1GameContext,
+        game: EnemyGameContext ,
         hp: number = 500,
         timeLimit?: number,
         timeMultiplier?: number
@@ -80,7 +65,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * メイン更新処理
      */
-    public override update(game: Stage1GameContext): void {
+    public override update(game: EnemyGameContext ): void {
         if (!this.active) return;
         this.frame++;
 
@@ -115,7 +100,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 2. 戦闘フェーズ更新（移動＋攻撃）
      */
-    public updateBattle(game: Stage1GameContext): void {
+    public updateBattle(game: EnemyGameContext ): void {
         // 親クラスで保持されている startX を基準に滑らかに横揺れ
         this.x = this.startX + Math.sin(this.frame * this.swingSpeed) * this.swingWidth;
 
@@ -134,7 +119,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 【弾幕A】 全方位リング弾を発射
      */
-    public fireRingBullets(game: Stage1GameContext, count: number = 8, speed: number = 3): void {
+    public fireRingBullets(game: EnemyGameContext , count: number = 8, speed: number = 3): void {
         const cx = this.centerX;
         const cy = this.centerY;
         const step = (Math.PI * 2) / count;
@@ -151,7 +136,7 @@ export class BossEnemy_01 extends BossEnemy {
      * 【弾幕B】 自機を狙った左右並列2連射
      */
     public fireTargetedDualBullets(
-        game: Stage1GameContext,
+        game: EnemyGameContext ,
         target: BossTargetLike,
         speed: number = 4,
         offsetX: number = 20
@@ -172,7 +157,7 @@ export class BossEnemy_01 extends BossEnemy {
     }
 
     public static override create(
-        game: Stage1GameContext,
+        game: EnemyGameContext ,
         _bType?: BulletType,
         hp?: number,
         data: EnemySpawnData = {}
