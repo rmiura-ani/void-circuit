@@ -1,19 +1,29 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * effects.js - 演出専用エンティティ（パーティクル、スコア表示、ボス前警告）
+ * effects.ts - 演出専用エンティティ（パーティクル、スコア表示、ボス前警告）
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { Entity } from './base.js';
+
+import { Entity, type GameContext } from './base.js';
+
+export type ParticleType = 'enemy' | 'player' | 'boss' | (string & {});
 
 /**
  * 演出用パーティクル
  */
 export class Particle extends Entity {
-    constructor(x, y, type = 'enemy') {
+    public type: ParticleType;
+    public vx: number;
+    public vy: number;
+    public life: number;
+    public maxLife: number;
+    public size: number;
+
+    constructor(x: number, y: number, type: ParticleType = 'enemy') {
         super(x, y, 2, 2);
         this.type = type;
         const angle = Math.random() * Math.PI * 2;
@@ -25,12 +35,12 @@ export class Particle extends Entity {
         this.size = (type === 'player') ? Math.random() * 4 + 2 : 2;
     }
 
-    update(game) {
+    public update(): void {
         this.x += this.vx;
         this.y += this.vy;
         if (this.type === 'player') {
-            this.vx *= 0.96; 
-            this.vy *= 0.96; 
+            this.vx *= 0.96;
+            this.vy *= 0.96;
             this.size *= 0.98;
         }
         this.life--;
@@ -40,10 +50,10 @@ export class Particle extends Entity {
     }
 
     /** パーティクルを描画する */
-    draw(ctx) {
+    public draw(ctx: CanvasRenderingContext2D): void {
         const ratio = this.life / this.maxLife;
         ctx.save();
-        
+
         if (this.type === 'player') {
             ctx.fillStyle = `rgba(255, ${Math.floor(255 * ratio)}, ${Math.floor(100 * ratio)}, ${ratio})`;
             ctx.beginPath();
@@ -60,7 +70,7 @@ export class Particle extends Entity {
             ctx.fillStyle = `rgba(255, 255, 100, ${ratio})`;
             ctx.fillRect(this.x, this.y, this.size, this.size);
         }
-        
+
         ctx.restore();
     }
 }
@@ -69,19 +79,29 @@ export class Particle extends Entity {
  * スコアテキスト：画面上に浮かび上がる得点演出（Entity継承クラス）
  */
 export class ScoreText extends Entity {
-    constructor(x, y, score, color = "#fff") {
+    public opacity: number;
+    public lines: string[];
+    public color: string;
+    public fontSize: number;
+    public maxLife: number;
+    public speed: number;
+    public isBonus: boolean;
+    public life: number;
+    public isBig: boolean;
+
+    constructor(x: number, y: number, score: number | string | Array<number | string>, color: string = "#fff") {
         super(x, y, 0, 0);
         this.opacity = 1.0;
 
         const rawLines = Array.isArray(score) ? score : [score];
-        this.lines = rawLines.map(line => 
+        this.lines = rawLines.map(line =>
             (typeof line === 'number') ? line.toLocaleString() : String(line)
         );
 
         const flatScore = this.lines.join(" ");
         const numScore = typeof score === 'number' ? score : 0;
 
-        let displayType = "NORMAL";
+        let displayType: "NORMAL" | "BONUS" | "BOSS_KILLED" | "MEDIUM_KILLED" = "NORMAL";
         if (flatScore.includes("BONUS")) {
             displayType = "BONUS";
         } else if (numScore >= 500000) {
@@ -128,24 +148,24 @@ export class ScoreText extends Entity {
         this.isBig = (displayType === "BONUS" || displayType === "BOSS_KILLED");
     }
 
-    update(game) {
-        this.y -= this.speed;        
+    public update(): void {
+        this.y -= this.speed;
         this.life--;
         this.opacity = Math.max(0, this.life / this.maxLife);
-        
+
         if (this.life <= 0) {
             this.active = false;
         }
     }
 
-    draw(ctx) {
+    public draw(ctx: CanvasRenderingContext2D): void {
         ctx.save();
         ctx.globalAlpha = this.opacity;
 
         ctx.font = `${this.fontSize}px 'Press Start 2P'`;
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle"; 
-        
+        ctx.textBaseline = "middle";
+
         ctx.strokeStyle = "#000";
         ctx.lineWidth = (this.isBig || this.isBonus) ? 4 : 2;
         ctx.fillStyle = this.color;
@@ -166,6 +186,10 @@ export class ScoreText extends Entity {
  * 画面全体にWARNING警告演出を表示する演出専用エンティティ
  */
 export class WarningEffect extends Entity {
+    public duration: number;
+    public frame: number;
+    public soundPlayed: boolean;
+
     constructor() {
         super(0, 0, 0, 0);
 
@@ -177,12 +201,9 @@ export class WarningEffect extends Entity {
 
     /**
      * フレーム更新処理
-     * @param {Game} game 
      */
-    update(game) {
-        if (super.update) {
-            super.update(game);
-        }
+    public update(game: GameContext): void {
+        super.update(game);
 
         // 初回フレームでサイレンSEを再生
         if (!this.soundPlayed) {
@@ -199,35 +220,29 @@ export class WarningEffect extends Entity {
 
     /**
      * 描画処理
-     * @param {CanvasRenderingContext2D} ctx 
      */
-    draw(ctx) {
+    public draw(ctx: CanvasRenderingContext2D): void {
         if (!this.active) return;
 
-        // ctx.canvas または game オブジェクトから画面幅・高さを正確に取得
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
-        const barHeight = 20; // 上下の警告バーの太さ
+        const barHeight = 20;
 
         ctx.save();
 
-        // ----------------------------------------------------
         // 1. 上下のハザードバー（黄×黒の斜めストライプ）
-        // ----------------------------------------------------
-        const drawHazardBar = (y) => {
+        const drawHazardBar = (y: number): void => {
             ctx.save();
             ctx.beginPath();
             ctx.rect(0, y, width, barHeight);
-            ctx.clip(); // バーの範囲内に描画領域を制限
+            ctx.clip();
 
-            // ベースの黄色背景
             ctx.fillStyle = "#ffd700";
             ctx.fillRect(0, y, width, barHeight);
 
-            // 斜めの黒ストライプを描画
             ctx.fillStyle = "#000000";
             const stripeWidth = 15;
-            
+
             for (let x = -barHeight; x < width + barHeight; x += stripeWidth * 2) {
                 ctx.beginPath();
                 ctx.moveTo(x, y);
@@ -238,7 +253,6 @@ export class WarningEffect extends Entity {
                 ctx.fill();
             }
 
-            // 赤色の上下枠線で引き締める
             ctx.strokeStyle = "#ff0000";
             ctx.lineWidth = 2;
             ctx.strokeRect(0, y, width, barHeight);
@@ -246,25 +260,19 @@ export class WarningEffect extends Entity {
             ctx.restore();
         };
 
-        // 画面の最上部と最下部に描画
         drawHazardBar(0);
         drawHazardBar(height - barHeight);
 
-        // ----------------------------------------------------
         // 2. 画面上部への WARNING テキスト表示
-        // ----------------------------------------------------
-        // 点滅アニメーション（12フレームごと）
         if (Math.floor(this.frame / 12) % 2 === 0) {
             ctx.fillStyle = "#ff2222";
             ctx.font = '16px "Press Start 2P", cursive';
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
-            // ネオン風の発光効果
             ctx.shadowColor = "#ff0000";
             ctx.shadowBlur = 10;
 
-            // 画面上部（Y = 45px 付近）
             ctx.fillText("WARNING", width / 2, 45);
         }
 

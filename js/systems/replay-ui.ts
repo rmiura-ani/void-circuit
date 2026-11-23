@@ -1,33 +1,51 @@
-/* systems/replay-ui.js */
-import { ReplayStorage } from './replayStorage.js';
-import { Game } from '../game.js';
+/*
+ * PROJECT: VOID-CIRCUIT
+ *
+ * systems/replay-ui.ts
+ * 
+ * Copyright (c) 2026 あに。部長 / Ryo Miura
+ * Licensed under the MIT License (see LICENSE file)
+ * Note: Included assets are the property of their respective owners.
+ */
+
+import { ReplayStorage, type ReplayRecord } from './replayStorage.js';
+import { Game, type GameControllerLike } from '../game.js';
+
+export interface ReplayGameLike {
+    destroy(): void;
+    startReplay?(replayData: ReplayRecord, stage: number): void;
+}
+
+export interface ReplayUIControllerLike extends GameControllerLike {
+    game: ReplayGameLike | null;
+    stopIdleTimer(): void;
+    startIdleTimer(): void;
+}
 
 export class ReplayUIManager {
-    /**
-     * @param {SystemController} controller 
-     */
-    constructor(controller) {
+    public sc: ReplayUIControllerLike;
+    public modalEl: HTMLDivElement | null = null;
+
+    constructor(controller: ReplayUIControllerLike) {
         this.sc = controller;
-        this.modalEl = null;
     }
 
     /** UIボタン・モーダルの初期セットアップ */
-    setupUI() {
+    public setupUI(): void {
         const startScreenNode = document.getElementById('start-screen');
         if (!startScreenNode) return;
 
         // タイトル画面に「REPLAY」ボタンを設置（未配置の場合のみ）
-        let replayBtn = document.getElementById('config-replay-btn');
+        let replayBtn = document.getElementById('config-replay-btn') as HTMLButtonElement | null;
         if (!replayBtn) {
             replayBtn = document.createElement('button');
             replayBtn.id = 'config-replay-btn';
             replayBtn.className = 'menu-btn';
             replayBtn.innerText = 'REPLAY';
-            // Start画面のUIグループに追加
             startScreenNode.appendChild(replayBtn);
         }
 
-        replayBtn.onclick = (e) => {
+        replayBtn.onclick = (e: MouseEvent) => {
             e.stopPropagation();
             this.sc.stopIdleTimer(); // タイトル放置タイマー停止
             this.openModal();
@@ -35,7 +53,7 @@ export class ReplayUIManager {
     }
 
     /** リプレイ選択モーダルを開く */
-    openModal() {
+    public openModal(): void {
         const replays = ReplayStorage.getList();
 
         if (!this.modalEl) {
@@ -54,7 +72,9 @@ export class ReplayUIManager {
                 </div>
             `;
         } else {
-            const listHtml = replays.map(r => `
+            const listHtml = replays
+                .map(
+                    (r) => `
                 <div class="replay-item">
                     <div class="replay-info">
                         <span class="replay-date">${r.dateStr}</span>
@@ -62,7 +82,9 @@ export class ReplayUIManager {
                     </div>
                     <button class="btn-play-replay" data-id="${r.id}">PLAY</button>
                 </div>
-            `).join('');
+            `
+                )
+                .join('');
 
             this.modalEl.innerHTML = `
                 <div class="modal-content">
@@ -76,17 +98,22 @@ export class ReplayUIManager {
         this.modalEl.style.display = 'flex';
 
         // 閉じるイベント
-        this.modalEl.querySelector('.modal-close-btn').onclick = () => {
-            this.closeModal();
-        };
+        const closeBtn = this.modalEl.querySelector<HTMLButtonElement>('.modal-close-btn');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                this.closeModal();
+            };
+        }
 
         // 各再生ボタンイベント
-        const playButtons = this.modalEl.querySelectorAll('.btn-play-replay');
-        playButtons.forEach(btn => {
-            btn.onclick = (e) => {
-                const id = e.target.getAttribute('data-id');
-                const replayData = ReplayStorage.getById(id);
+        const playButtons = this.modalEl.querySelectorAll<HTMLButtonElement>('.btn-play-replay');
+        playButtons.forEach((btn) => {
+            btn.onclick = (e: MouseEvent) => {
+                const target = e.currentTarget as HTMLButtonElement | null;
+                const id = target?.getAttribute('data-id');
+                if (!id) return;
 
+                const replayData = ReplayStorage.getById(id);
                 if (replayData) {
                     this.closeModal();
                     this.startReplayPlayback(replayData);
@@ -96,7 +123,7 @@ export class ReplayUIManager {
     }
 
     /** モーダルを閉じる */
-    closeModal() {
+    public closeModal(): void {
         if (this.modalEl) {
             this.modalEl.style.display = 'none';
         }
@@ -104,7 +131,7 @@ export class ReplayUIManager {
     }
 
     /** リプレイ再生の実行 */
-    startReplayPlayback(replayData) {
+    public startReplayPlayback(replayData: ReplayRecord): void {
         if (this.sc.game) {
             this.sc.game.destroy();
             this.sc.game = null;

@@ -1,34 +1,76 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * soundTest.js
- *
+ * soundTest.ts
+ * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { ScenarioManager } from './../systems/scenario.js';
+
+import { ScenarioManager } from '../systems/scenario.js';
+
+export interface BGMListItem {
+    stagePath: string;
+    fileName: string;
+    displayName: string;
+}
+
+export interface EQSettings {
+    low: number;
+    mid: number;
+    high: number;
+}
+
+export interface RoomPreset {
+    reverbWet: number;
+    echoWet: number;
+}
+
+export interface SoundTestAudioLike {
+    seCount?: number;
+    roomPresetCount?: number;
+    eqSettings?: EQSettings;
+    ROOM_PRESETS?: Record<number, RoomPreset>;
+    bgmNode?: { onended: (() => void) | null } | null;
+    onBGMEnded?: (() => void) | null;
+    loadStageBGM(fileName: string, stagePath: string): Promise<unknown>;
+    setDynamicBGMList?: (list: BGMListItem[]) => void;
+    playBGMByIndex?: (index: number) => void;
+    playSEByIndex(index: number): void;
+    setAudioRoomPreset(index: number): void;
+    resetBGM(): void;
+    setEQGain(band: keyof EQSettings, value: number): void;
+    getByteFrequencyData?: () => Uint8Array | null;
+}
+
+export interface SoundTestControllerLike {
+    assetBase?: string;
+    audio?: SoundTestAudioLike | null;
+}
 
 /**
  * SoundTestManager: 設定画面内のサウンドテスト（BGM/SE）ロジックを専門に管理
  */
 export class SoundTestManager {
-    constructor(sc) {
+    public sc: SoundTestControllerLike;
+    public soundTestIndex: number = 0;
+    public bgmTestIndex: number = 0;
+    public roomPresetIndex: number = 0;
+    public isBGMPlaying: boolean = false;
+    public onIndexChanged: (() => void) | null = null;
+    public peaks: number[] = new Array<number>(32).fill(0);
+    public bgmList: BGMListItem[] = [];
+
+    constructor(sc: SoundTestControllerLike) {
         this.sc = sc;
-        this.soundTestIndex = 0;
-        this.bgmTestIndex = 0;
-        this.roomPresetIndex = 0;   // 📻【新設】空間プリセット用の選択インデックス
-        this.isBGMPlaying = false;
-        this.onIndexChanged = null; // UI側に更新を通知するコールバック
-        this.peaks = new Array(32).fill(0);
-        this.bgmList = [];
     }
 
     /** 動的にサウンドリストを構築 */
-    async buildDynamicSoundTestList() {
-        const totalStages = 7; 
-        const metaPromises = [];
-        const base = this.sc.assetBase || "";
+    public async buildDynamicSoundTestList(): Promise<void> {
+        const totalStages = 7;
+        const metaPromises: Promise<{ bgm?: string; name?: string } | null>[] = [];
+        const base = this.sc.assetBase || '';
 
         const scenario = new ScenarioManager();
 
@@ -37,54 +79,55 @@ export class SoundTestManager {
             metaPromises.push(scenario.peekStageMeta(i, base));
         }
 
-        const results = await Promise.all(metaPromises); 
-        
+        const results = await Promise.all(metaPromises);
+
         // 2. 有効なBGMエントリーの初期リスト化
         const candidateList = results
             .map((meta, index) => ({
-                stagePath: `stage-${index + 1}`, // 💡 ここで stagePath を定義しておく！
-                fileName: meta?.bgm || null,
+                stagePath: `stage-${index + 1}`,
+                fileName: meta?.bgm ?? null,
                 displayName: meta?.name ? `Stage-${index + 1}: ${meta.name}` : `Stage-${index + 1}`
             }))
-            .filter(item => item.fileName !== null);
+            .filter((item): item is BGMListItem => item.fileName !== null);
 
         if (candidateList.length === 0) {
-            console.warn("[SoundTest] WARNING: No stage YAMLs returned valid BGM data.");
+            console.warn('[SoundTest] WARNING: No stage YAMLs returned valid BGM data.');
             return;
         }
 
         if (!this.sc.audio) {
-            console.error("[SoundTest] ERROR: Audio manager (this.sc.audio) is missing!");
+            console.error('[SoundTest] ERROR: Audio manager (this.sc.audio) is missing!');
             return;
         }
 
+        const audio = this.sc.audio;
+
         // 3. 各BGMを「stage-X」指定でロードを試み、フォールバックも含めて安全にロード完了を待つ
         const loadedList = await Promise.all(
-            candidateList.map(async (item) => {
-                // 💡 item.stagePath を使用
-                const audioObj = await this.sc.audio.loadStageBGM(item.fileName, item.stagePath);
-                
+            candidateList.map(async (item): Promise<BGMListItem | null> => {
+                const audioObj = await audio.loadStageBGM(item.fileName, item.stagePath);
+
                 if (audioObj) {
-                    return item; // ロード成功
+                    return item;
                 } else {
                     console.error(`[SoundTest] Failed to load BGM for ${item.stagePath}: ${item.fileName}`);
-                    return null; // 親フォルダにすらなかった場合
+                    return null;
                 }
             })
         );
 
         // ロードに成功したものだけに絞り込む
-        const validBgmList = loadedList.filter(item => item !== null);
+        const validBgmList = loadedList.filter((item): item is BGMListItem => item !== null);
 
         // 4. オーディオマネージャーと自前リストを更新
-        if (typeof this.sc.audio.setDynamicBGMList === 'function') {
-            this.sc.audio.setDynamicBGMList(validBgmList);            
+        if (typeof audio.setDynamicBGMList === 'function') {
+            audio.setDynamicBGMList(validBgmList);
         }
         this.bgmList = validBgmList;
     }
 
     /** 補助メソッド：現在のステージ表記＋曲名を識別子として取得 */
-    _getCurrentBgmName() {
+    private _getCurrentBgmName(): string {
         if (this.bgmList && this.bgmList[this.bgmTestIndex]) {
             const current = this.bgmList[this.bgmTestIndex];
             return `${current.stagePath} [${current.fileName}]`;
@@ -93,32 +136,32 @@ export class SoundTestManager {
     }
 
     /** 内部補助: 現在選択中の BGM を再生 */
-    _playCurrentBgm() {
+    private _playCurrentBgm(): void {
         const currentBgm = this.bgmList[this.bgmTestIndex];
         if (!currentBgm || !this.sc.audio) return;
 
-        // 💡 buildDynamicSoundTestList で準備済みのため、インデックス指定で再生するだけ
         if (typeof this.sc.audio.playBGMByIndex === 'function') {
             this.sc.audio.playBGMByIndex(this.bgmTestIndex);
         }
 
-        // アナリティクスログ
-        if (typeof Analytics !== 'undefined' && Analytics.logBgmTestPlay) {
-            Analytics.logBgmTestPlay(this._getCurrentBgmName());
+        if (window.Analytics?.logBgmTestPlay) {
+            window.Analytics.logBgmTestPlay(this._getCurrentBgmName());
         }
     }
 
     /** SEの選択インデックスを変更 */
-    changeSEIndex(isRight) {
+    public changeSEIndex(isRight: boolean): void {
         if (!this.sc.audio) return;
         const len = this.sc.audio.seCount || 0;
         if (len > 0) {
-            this.soundTestIndex = isRight ? (this.soundTestIndex + 1) % len : (this.soundTestIndex - 1 + len) % len;
+            this.soundTestIndex = isRight
+                ? (this.soundTestIndex + 1) % len
+                : (this.soundTestIndex - 1 + len) % len;
         }
     }
 
     /** BGMの選択インデックスを変更 */
-    changeBGMIndex(isRight) {
+    public changeBGMIndex(isRight: boolean): void {
         const len = this.bgmList?.length || 0;
         if (!this.sc.audio || len === 0) return;
 
@@ -130,27 +173,28 @@ export class SoundTestManager {
         }
     }
 
-    /** 📻【新設】空間アコースティックプリセットの選択インデックスを変更 */
-    changeRoomPresetIndex(isRight) {
+    /** 空間アコースティックプリセットの選択インデックスを変更 */
+    public changeRoomPresetIndex(isRight: boolean): void {
         if (!this.sc.audio) return;
         const len = this.sc.audio.roomPresetCount || 0;
         if (len > 0) {
-            this.roomPresetIndex = isRight ? (this.roomPresetIndex + 1) % len : (this.roomPresetIndex - 1 + len) % len;
-            
-            // オーディオマネージャー側のノードへリアルタイムに数値を注入
+            this.roomPresetIndex = isRight
+                ? (this.roomPresetIndex + 1) % len
+                : (this.roomPresetIndex - 1 + len) % len;
+
             this.sc.audio.setAudioRoomPreset(this.roomPresetIndex);
         }
     }
 
     /** SEの再生 */
-    playSE() {
+    public playSE(): void {
         if (this.sc.audio) {
             this.sc.audio.playSEByIndex(this.soundTestIndex);
         }
     }
 
     /** BGMの再生・停止をトグル制御 */
-    toggleBGM(onToggleOnCallback) {
+    public toggleBGM(onToggleOnCallback?: () => void): void {
         if (!this.sc.audio) return;
 
         this.isBGMPlaying = !this.isBGMPlaying;
@@ -159,7 +203,7 @@ export class SoundTestManager {
             this._playCurrentBgm();
 
             if (typeof onToggleOnCallback === 'function') {
-                onToggleOnCallback(); // イコライザー表示用コールバック
+                onToggleOnCallback();
             }
         } else {
             this.sc.audio.resetBGM();
@@ -167,17 +211,17 @@ export class SoundTestManager {
     }
 
     /** BGM終了時の自動次曲遷移リスナーを設定 */
-    setupAudioEndedListener(isModeActive) {
-        if (!this.sc.audio) return;        
+    public setupAudioEndedListener(isModeActiveGetter: () => boolean): void {
+        if (!this.sc.audio) return;
         this.sc.audio.resetBGM();
         this.sc.audio.onBGMEnded = () => {
-            if (!isModeActive || !this.isBGMPlaying) return;
+            if (!isModeActiveGetter() || !this.isBGMPlaying) return;
             this.playNextBGMAutomated();
         };
     }
 
     /** 自動で次の曲へ移行 */
-    playNextBGMAutomated() {
+    public playNextBGMAutomated(): void {
         if (!this.sc.audio) return;
         const len = this.bgmList.length;
         if (len <= 0) return;
@@ -186,14 +230,13 @@ export class SoundTestManager {
         this.isBGMPlaying = true;
         this._playCurrentBgm();
 
-        // UI側に「曲が変わったから描画更新して！」と通知
         if (typeof this.onIndexChanged === 'function') {
             this.onIndexChanged();
         }
     }
 
     /** 状態の強制リセット */
-    stopAndReset() {
+    public stopAndReset(): void {
         if (this.sc.audio) {
             this.sc.audio.resetBGM();
             if (this.sc.audio.bgmNode) {
@@ -205,11 +248,11 @@ export class SoundTestManager {
     }
 
     /** EQ（Low/Mid/High）のゲイン値をリアルタイムに変更 */
-    changeEQGain(setting, isRight) {
-        if (!this.sc.audio) return;
+    public changeEQGain(setting: 'eq_low' | 'eq_mid' | 'eq_high', isRight: boolean): void {
+        if (!this.sc.audio || !this.sc.audio.eqSettings) return;
 
         const step = isRight ? 1 : -1;
-        const targetBand = setting.replace('eq_', ''); // 'low', 'mid', 'high' を抽出
+        const targetBand = setting.replace('eq_', '') as keyof EQSettings;
 
         const currentVal = this.sc.audio.eqSettings[targetBand];
         const newVal = Math.max(-10, Math.min(15, currentVal + step));
@@ -218,7 +261,12 @@ export class SoundTestManager {
     }
 
     /** イコライザーの描画ロジック（0 dB基準・空間エフェクト連動強化版） */
-    drawEqualizer(ctx, x, y, currentSetting) {
+    public drawEqualizer(
+        ctx: CanvasRenderingContext2D,
+        x: number,
+        y: number,
+        _currentSetting?: string
+    ): void {
         if (!this.sc.audio || !this.sc.audio.getByteFrequencyData) return;
 
         const rawData = this.sc.audio.getByteFrequencyData();
@@ -227,23 +275,23 @@ export class SoundTestManager {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         const targetIndices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        const activeCount = targetIndices.length; 
+        const activeCount = targetIndices.length;
         const canvasWidth = ctx.canvas.width;
         const maxHeight = ctx.canvas.height;
-        const barGap = 4; 
-        const barWidth = (canvasWidth - (barGap * (activeCount - 1))) / activeCount;
+        const barGap = 4;
+        const barWidth = (canvasWidth - barGap * (activeCount - 1)) / activeCount;
 
         const eqSettings = this.sc.audio.eqSettings || { low: 0, mid: 0, high: 0 };
-        
-        const lowBoost  = Math.max(0, eqSettings.low);
-        const midBoost  = Math.max(0, eqSettings.mid);
+
+        const lowBoost = Math.max(0, eqSettings.low);
+        const midBoost = Math.max(0, eqSettings.mid);
         const highBoost = Math.max(0, eqSettings.high);
 
         let currentHue = 130;
         const totalBoost = lowBoost + midBoost + highBoost;
 
         if (totalBoost > 0) {
-            const targetHue = ((lowBoost * 20) + (midBoost * 130) + (highBoost * 195)) / totalBoost;
+            const targetHue = (lowBoost * 20 + midBoost * 130 + highBoost * 195) / totalBoost;
             const maxBoost = Math.max(lowBoost, midBoost, highBoost);
             const shiftRatio = Math.pow(maxBoost / 15, 0.5);
             currentHue = 130 * (1 - shiftRatio) + targetHue * shiftRatio;
@@ -270,8 +318,8 @@ export class SoundTestManager {
         ctx.save();
         for (let i = 0; i < activeCount; i++) {
             const rawIdx = targetIndices[i];
-            let rawValue = rawData[rawIdx];
-            let processedValue = ((rawValue - 140 + (rawIdx * 6)) * 2);
+            const rawValue = rawData[rawIdx];
+            let processedValue = (rawValue - 140 + rawIdx * 6) * 2;
             processedValue = Math.max(0, Math.min(255, processedValue));
             let barHeight = (processedValue / 255) * maxHeight;
 
@@ -291,15 +339,15 @@ export class SoundTestManager {
             if (barHeight >= this.peaks[i]) {
                 this.peaks[i] = barHeight;
             } else {
-                this.peaks[i] = Math.max(0, this.peaks[i] - 0.45); 
+                this.peaks[i] = Math.max(0, this.peaks[i] - 0.45);
             }
 
             if (this.peaks[i] > 0) {
-                ctx.fillStyle = "rgba(255, 255, 220, 0.95)";
+                ctx.fillStyle = 'rgba(255, 255, 220, 0.95)';
                 ctx.fillRect(barX, y + maxHeight - this.peaks[i], barWidth, 2);
             }
 
-            ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
             for (let h = 0; h < maxHeight; h += 4) {
                 ctx.fillRect(barX, y + h, barWidth + 1, 1);
             }

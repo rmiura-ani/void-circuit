@@ -1,7 +1,7 @@
 {
   "name": "void-circuit",
   "private": true,
-  "version": "0.70",
+  "version": "0.70.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
   },

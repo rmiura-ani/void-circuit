@@ -1,17 +1,94 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * UI・演出管理コンポーネント (game-ui.js)
+ * UI・演出管理コンポーネント (game-ui.ts)
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 
+import type { AudioManager } from './systems/audio.js';
+import type { AssetManager } from './entities/base.js';
+
+export interface GameUIDOM {
+    startScreen: HTMLElement | null;
+    livesDisplay: HTMLElement | null;
+    weaponContainer: HTMLElement | null;
+    scoreDisplay: HTMLElement | null;
+    hiScoreDisplay: HTMLElement | null;
+    gameContainer: HTMLElement | null;
+    debugInfo: HTMLElement | null;
+    fullscreenKv: HTMLElement | null;
+    warpPlayer: HTMLImageElement | null;
+}
+
+export interface BossEntityLike {
+    isBoss?: boolean;
+    timeLimit?: number;
+}
+
+export interface ScenarioUIData {
+    currentScenarioFrame?: number;
+    currentIndex?: number;
+    length?: number;
+    stageName?: string;
+    kv?: string | { path?: string; duration?: number } | null;
+}
+
+/** GameUIManager が参照する Game のインターフェース */
+export interface GameUIContext {
+    width: number;
+    height: number;
+    score: number;
+    lives: number;
+    frame: number;
+    currentStageNum?: number;
+    isEnding: boolean;
+    isCleared: boolean;
+    isPaused: boolean;
+    isInvincibleCheat?: boolean;
+    bossStartTime: number;
+    entities?: BossEntityLike[];
+    scenario?: ScenarioUIData;
+    assets?: AssetManager & Record<string, HTMLImageElement | undefined>;
+    player?: {
+        alive: boolean;
+    } | null;
+    stats?: {
+        enemiesSpawned: number;
+        enemiesKilled: number;
+    };
+    sc?: {
+        assetBase?: string;
+        highScore?: number;
+        audio?: AudioManager;
+    };
+    endSession?: (reason?: string) => void;
+}
+
 export class GameUIManager {
-    constructor(game) {
+    public game: GameUIContext;
+    public dom: GameUIDOM;
+
+    // DOMキャッシュ比較用メモリ
+    private _lastScoreText: string = '';
+    private _lastHiScoreText: string = '';
+
+    // 演出・タイマー管理用状態
+    public hasPlayedCounterStopSE: boolean = false;
+    public isExtending: boolean = false;
+    private _blinkTimer: ReturnType<typeof setTimeout> | null = null;
+
+    public isKvActive: boolean = false;
+    private _kvShown: boolean = false;
+
+    private _endingPhase: number = 0;
+    private _endingTimer: number = 0;
+
+    constructor(game: GameUIContext) {
         this.game = game;
-        
+
         // --- DOM要素のキャッシュ ---
         this.dom = {
             startScreen: document.getElementById('start-screen'),
@@ -22,30 +99,26 @@ export class GameUIManager {
             gameContainer: document.getElementById('game-container'),
             debugInfo: document.getElementById('debug-info'),
             fullscreenKv: document.getElementById('fullscreen-kv'),
-            warpPlayer: document.getElementById('fullscreen-warp-player')
+            warpPlayer: document.getElementById('fullscreen-warp-player') as HTMLImageElement | null
         };
-
-        // DOMキャッシュ比較用メモリ
-        this._lastScoreText = '';
-        this._lastHiScoreText = '';
 
         this.resetGameUIState();
     }
 
     /** メインループから毎フレーム呼ばれるUI一括更新メソッド */
-    update() {
+    public update(): void {
         this.updateScoreUI();
         this.updateLivesUI();
     }
 
     /** UI状態リセット系 */
 
-    resetGameUIState() {
+    public resetGameUIState(): void {
         this.hasPlayedCounterStopSE = false;
         this.resetStageUIState();
     }
 
-    resetStageUIState() {
+    public resetStageUIState(): void {
         if (this.dom.startScreen) this.dom.startScreen.style.display = 'none';
         if (this.dom.livesDisplay) this.dom.livesDisplay.style.display = 'block';
         if (this.dom.weaponContainer) this.dom.weaponContainer.style.display = 'block';
@@ -58,7 +131,6 @@ export class GameUIManager {
 
         this._endingPhase = 0;
         this._endingTimer = 0;
-        this._endingKvAlpha = 0;
         if (this.game) this.game.isEnding = false;
 
         if (this.dom.fullscreenKv) {
@@ -74,9 +146,19 @@ export class GameUIManager {
         this._lastHiScoreText = '';
     }
 
+    /**
+     * 武器選択UIを非表示にする
+     */
+    public hideWeaponUI(): void {
+        const weaponContainer = document.getElementById('weapon-container');
+        if (weaponContainer) {
+            weaponContainer.style.display = 'none';
+        }
+    }    
+
     /** DOM / HTML UI更新系 */
 
-    updateScoreUI() {
+    public updateScoreUI(): void {
         const DIGITS = 7;
         const MAX_DISPLAY_SCORE = 9999990;
 
@@ -110,7 +192,7 @@ export class GameUIManager {
         }
     }
 
-    triggerExtendBlink() {
+    public triggerExtendBlink(): void {
         this.game.sc?.audio?.playPowerUp?.();
         this.isExtending = true;
         this.updateLivesUI();
@@ -123,7 +205,7 @@ export class GameUIManager {
         }, 2000);
     }
 
-    updateLivesUI() {
+    public updateLivesUI(): void {
         const el = this.dom.livesDisplay;
         if (!el) return;
 
@@ -157,7 +239,7 @@ export class GameUIManager {
         }
     }
 
-    visualEffectWarning() {
+    public visualEffectWarning(): void {
         const container = this.dom.gameContainer;
         if (!container) return;
         container.style.transition = "filter 0.1s";
@@ -165,17 +247,17 @@ export class GameUIManager {
         setTimeout(() => { container.style.filter = ""; }, 150);
     }
 
-    updateDebugInfo() {
+    public updateDebugInfo(): void {
         const debugEl = this.dom.debugInfo;
         if (!debugEl || !this.game.isInvincibleCheat) {
             if (debugEl) debugEl.style.display = 'none';
             return;
         }
         debugEl.style.display = 'block';
-        
-        const setElText = (id, val) => {
+
+        const setElText = (id: string, val: string | number): void => {
             const el = document.getElementById(id);
-            if (el) el.innerText = val;
+            if (el) el.innerText = String(val);
         };
 
         setElText('debug-frame', this.game.frame);
@@ -183,36 +265,35 @@ export class GameUIManager {
         setElText('debug-index', `${this.game.scenario?.currentIndex || 0} / ${this.game.scenario?.length || 0}`);
 
         const bonusEl = document.getElementById('debug-bonus-time');
-        const boss = this.game.entities?.find(e => e.isBoss); 
-        
+        const boss = this.game.entities?.find(e => e.isBoss);
+
         if (boss && this.game.bossStartTime > 0 && bonusEl) {
             const elapsed = this.game.frame - this.game.bossStartTime;
             const remaining = Math.max(0, (boss.timeLimit || 0) - elapsed);
             bonusEl.innerText = `${remaining}F (${(remaining / 60).toFixed(2)}s)`;
-            bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff"; 
+            bonusEl.style.color = remaining < 600 ? "#f00" : "#0ff";
         } else if (bonusEl) {
             bonusEl.innerText = "---";
             bonusEl.style.color = "#888";
-        }        
+        }
         setElText('debug-load', this.game.entities?.length || 0);
         setElText('debug-spawn', this.game.stats?.enemiesSpawned || 0);
         setElText('debug-kill', this.game.stats?.enemiesKilled || 0);
     }
-
 
     // ---------------------------------------------------------------
     // 🎨 キャンバスオーバーレイ描画の親（マスター）メソッド
     // ---------------------------------------------------------------
 
     /** オーバーレイ演出の一括描画統括 */
-    drawOverlayMessages(ctx) {
+    public drawOverlayMessages(ctx: CanvasRenderingContext2D): void {
         ctx.save();
         ctx.font = '16px "Press Start 2P", cursive';
         ctx.textAlign = 'center';
 
         // 優先度1: エンディング演出
         if (this.game.isEnding) {
-            this._drawEndingOverlay(ctx);
+            this._drawEndingOverlay();
             ctx.restore();
             return;
         }
@@ -240,17 +321,16 @@ export class GameUIManager {
         ctx.restore();
     }
 
-
     // ---------------------------------------------------------------
     // 🧩 演出ごとの個別描画メソッド
     // ---------------------------------------------------------------
 
     /** 🌟 1. エンディング演出 */
-    _drawEndingOverlay(ctx) {
+    private _drawEndingOverlay(): void {
         const domKv = this.dom.fullscreenKv;
         const container = this.dom.gameContainer;
         const warpPlayer = this.dom.warpPlayer;
-        
+
         if (this._endingPhase === 0) {
             this._endingPhase = 1;
             this._endingTimer = 0;
@@ -279,7 +359,7 @@ export class GameUIManager {
         if (this._endingPhase === 2 && this._endingTimer >= 330) this._endingPhase = 3;
         if (this._endingPhase === 3 && this._endingTimer >= 360) {
             this._endingPhase = 4;
-            this._endingTimer = 0; 
+            this._endingTimer = 0;
         }
         if (this._endingPhase === 4) {
             if (this._endingTimer === 60 && domKv) {
@@ -287,7 +367,7 @@ export class GameUIManager {
             }
 
             if (this._endingTimer >= 180) {
-                this._endingPhase = 5; 
+                this._endingPhase = 5;
                 this.resetGameUIState();
                 if (container) container.style.display = 'block';
                 console.log("[Ending] Full HTML-Ending completed. To Credits.");
@@ -297,7 +377,7 @@ export class GameUIManager {
     }
 
     /** 💀 2. ゲームオーバー演出 */
-    _drawGameOverOverlay(ctx) {
+    private _drawGameOverOverlay(ctx: CanvasRenderingContext2D): void {
         this.isKvActive = false;
 
         ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
@@ -307,15 +387,15 @@ export class GameUIManager {
     }
 
     /** 🌌 3. 道中 KV 演出 */
-    _drawStageKVOverlay(ctx) {
-        let kvPath = null;
+    private _drawStageKVOverlay(ctx: CanvasRenderingContext2D): void {
+        let kvPath: string | null = null;
         let kvDuration = 180;
 
-        const scenario = this.game.scenario || {};
+        const scenario: ScenarioUIData = this.game.scenario || {};
 
         if (scenario.kv) {
             if (typeof scenario.kv === 'object') {
-                kvPath = scenario.kv.path;
+                kvPath = scenario.kv.path || null;
                 kvDuration = scenario.kv.duration || 180;
             } else {
                 kvPath = scenario.kv;
@@ -342,16 +422,18 @@ export class GameUIManager {
 
                 const rawSrc = kvImage?.src ? decodeURIComponent(kvImage.src) : '';
                 const targetPath = decodeURIComponent(kvPath);
-                
-                const isCorrectImageLoaded = kvImage && 
-                    kvImage.complete && 
-                    kvImage.naturalWidth > 0 && 
-                    rawSrc.endsWith(targetPath);
 
-                if (isCorrectImageLoaded) {
+                const isCorrectImageLoaded = Boolean(
+                    kvImage &&
+                    kvImage.complete &&
+                    kvImage.naturalWidth > 0 &&
+                    rawSrc.endsWith(targetPath)
+                );
+
+                if (isCorrectImageLoaded && kvImage) {
                     ctx.save();
                     const progress = this.game.frame / kvDuration;
-                    
+
                     let kvAlpha = 0;
                     if (this.game.frame <= 25) {
                         kvAlpha = Math.min(1.0, Math.max(0, this.game.frame / 25));
@@ -364,7 +446,7 @@ export class GameUIManager {
                     const baseWidth = this.game.width;
                     const aspectRatio = kvImage.height / kvImage.width;
                     const baseHeight = baseWidth * aspectRatio;
-                    const scale = 1.12 - (progress * 0.12); 
+                    const scale = 1.12 - (progress * 0.12);
                     const drawWidth = baseWidth * scale;
                     const drawHeight = baseHeight * scale;
                     const drawX = (this.game.width - drawWidth) / 2;
@@ -391,7 +473,7 @@ export class GameUIManager {
             ctx.font = '16px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(0, 255, 255, ${textAlpha.toFixed(2)})`;
             ctx.fillText(`STAGE ${this.game.currentStageNum || 1}`, this.game.width / 2, textCenterY);
-            
+
             ctx.font = '11px "Press Start 2P", cursive';
             ctx.fillStyle = `rgba(255, 255, 255, ${textAlpha.toFixed(2)})`;
             ctx.fillText(scenario.stageName || '', this.game.width / 2, textCenterY + 30);
@@ -402,17 +484,17 @@ export class GameUIManager {
     }
 
     /** 🎉 4. ステージクリア演出 */
-    _drawStageClearOverlay(ctx) {
-        const stageNameStr = this.game.scenario?.stageName || ''; 
+    private _drawStageClearOverlay(ctx: CanvasRenderingContext2D): void {
+        const stageNameStr = this.game.scenario?.stageName || '';
         ctx.fillStyle = '#0FF';
-        ctx.fillText(`STAGE ${this.game.currentStageNum || 1} CLEAR`, this.game.width / 2, this.game.height / 2);            
+        ctx.fillText(`STAGE ${this.game.currentStageNum || 1} CLEAR`, this.game.width / 2, this.game.height / 2);
         ctx.font = '10px "Press Start 2P", cursive';
         ctx.fillStyle = '#FFF';
         ctx.fillText(stageNameStr, this.game.width / 2, this.game.height / 2 + 30);
     }
 
     /** ⏸️ 5. ポーズ演出 */
-    _drawPauseOverlay(ctx) {
+    private _drawPauseOverlay(ctx: CanvasRenderingContext2D): void {
         ctx.save();
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';

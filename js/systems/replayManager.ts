@@ -3,7 +3,30 @@
  * ReplayManager - 座標・アクションログの記録と再生管理
  */
 
+/** 動作モードのユニオン型 */
+export type ReplayMode = 'RECORD' | 'PLAYBACK';
+
+/** 1フレームごとの記録データ */
+export interface ReplayFrame {
+    x: number;
+    y: number;
+    f: 0 | 1; // Shot
+    b: 0 | 1; // Bomb / Weapon Switch
+}
+
+/** 再生・エクスポート用のリプレイデータ構造 */
+export interface ReplayData {
+    version?: string;
+    seed: number;
+    log: ReplayFrame[];
+}
+
 export class ReplayManager {
+    public mode: ReplayMode;
+    public seed: number;
+    public log: ReplayFrame[];
+    public currentFrame: number;
+
     constructor() {
         this.mode = 'RECORD'; // 'RECORD' | 'PLAYBACK'
         this.seed = 12345;
@@ -12,7 +35,7 @@ export class ReplayManager {
     }
 
     /** 録画開始 */
-    startRecording(seed) {
+    public startRecording(seed: number): void {
         this.mode = 'RECORD';
         this.seed = seed;
         this.log = [];
@@ -21,7 +44,7 @@ export class ReplayManager {
     }
 
     /** 再生開始 */
-    startPlayback(replayData) {
+    public startPlayback(replayData: ReplayData): void {
         this.mode = 'PLAYBACK';
         this.seed = replayData.seed;
         this.log = replayData.log || [];
@@ -32,7 +55,7 @@ export class ReplayManager {
     /**
      * 【録画】自機の最終座標とボタン入力を記録
      */
-    recordFrame(x, y, isFiring, isBomb) {
+    public recordFrame(x: number, y: number, isFiring: boolean, isBomb: boolean): void {
         if (this.mode !== 'RECORD') return;
 
         this.log.push({
@@ -48,7 +71,7 @@ export class ReplayManager {
     /**
      * 【再生】現在のフレームの座標・アクションデータを取り出す
      */
-    getCurrentFrameData() {
+    public getCurrentFrameData(): ReplayFrame | null {
         if (this.mode !== 'PLAYBACK') return null;
 
         const data = this.log[this.currentFrame];
@@ -62,8 +85,8 @@ export class ReplayManager {
     }
 
     /** エクスポート用データの出力 */
-    exportReplay() {
-        const payload = {
+    public exportReplay(): Required<ReplayData> {
+        const payload: Required<ReplayData> = {
             version: '1.0',
             seed: this.seed,
             log: this.log

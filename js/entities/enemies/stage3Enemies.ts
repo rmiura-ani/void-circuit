@@ -1,15 +1,33 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/stage3Enemies.js - STAGE-3 (Cloud Palace) 固有敵クラス群 & ボス
+ * entities/enemies/stage3Enemies.ts - STAGE-3 (Cloud Palace) 固有敵クラス群 & ボス
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
 
-import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
+import {
+    Enemy,
+    BossEnemy,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData,
+    type BossHitboxPart
+} from '../enemy.js';
+
+export interface Stage3GameContext extends EnemyGameContext {
+    player?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        alive?: boolean;
+    } | null;
+}
+
 
 // ==========================================
 // 1. STAGE-3 固有のザコ・中型敵クラス群
@@ -19,33 +37,33 @@ import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
  * 1. WindSlicer: 画面左右の外側から超高速で水平横断する風切りストライカー
  */
 export class WindSlicerEnemy extends Enemy {
-    isLeftToRight = true;
-    speedX = 7.0;
-    hasShot = false;
+    public isLeftToRight: boolean = true;
+    public speedX: number = 7.0;
+    public hasShot: boolean = false;
 
-    get imageName() { return "enemy_wind_slicer.webp"; }
+    public override get imageName(): string { return "enemy_wind_slicer.webp"; }
 
-    constructor(game, bulletType = 'straight', hp = 1) {
+    constructor(game: Stage3GameContext, bulletType: BulletType = 'straight', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = 40;
         this.height = (157 / 241) * 40;
     }
 
     /** 方向と速度の設定 */
-    setDirection(isLeftToRight) {
+    public setDirection(isLeftToRight: boolean): void {
         this.isLeftToRight = isLeftToRight;
         this.speedX = isLeftToRight ? 7.0 : -7.0;
     }
 
-    update(game) {
+    public override update(game: Stage3GameContext): void {
         if (!this.active) return;
 
         this.x += this.speedX;
 
         // 画面中央を通過する瞬間に1発だけ親の shoot(game) で射撃
-        const isNearCenter = this.isLeftToRight 
-            ? (this.x >= game.width / 2) 
-            : (this.x <= game.width / 2);
+        const isNearCenter = this.isLeftToRight
+            ? this.x >= game.width / 2
+            : this.x <= game.width / 2;
 
         if (isNearCenter && !this.hasShot) {
             this.shoot(game);
@@ -58,7 +76,7 @@ export class WindSlicerEnemy extends Enemy {
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         if (!this.active) return;
 
         ctx.save();
@@ -72,16 +90,26 @@ export class WindSlicerEnemy extends Enemy {
             ctx.translate(-centerX, -centerY);
         }
         super.draw(ctx, isDebug);
-        ctx.restore(); 
+        ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage3GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): WindSlicerEnemy {
         const enemy = new WindSlicerEnemy(game, bType, hp);
-        
+
         // data.from が 'right' または data.isLeft が false なら右から左へ移動
-        const isLeftToRight = data.from === 'right' ? false : (data.isLeft !== undefined ? data.isLeft : true);
+        const isLeftToRight =
+            data.from === 'right'
+                ? false
+                : typeof data.isLeft === 'boolean'
+                  ? data.isLeft
+                  : true;
         enemy.setDirection(isLeftToRight);
-        
+
         return enemy;
     }
 }
@@ -90,23 +118,23 @@ export class WindSlicerEnemy extends Enemy {
  * 2. CloudLurker: 雲の中に隠れて半透明で出現し、射撃時のみ実体化（グラフィック明瞭化）する奇襲機
  */
 export class CloudLurkerEnemy extends Enemy {
-    speed = 1.2;
-    alpha = 0.25; // 雲の中（半透明）
+    public speed: number = 1.2;
+    public alpha: number = 0.25; // 雲の中（半透明）
+    public baseShootInterval: number = 60;
 
-    get imageName() { return "enemy_cloud_lurker.webp"; }
+    public override get imageName(): string { return "enemy_cloud_lurker.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 2) {
+    constructor(game: Stage3GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
-        this.baseShootInterval = 60; // 60フレーム間隔で射撃
     }
 
-    update(game) {
+    public override update(game: Stage3GameContext): void {
         if (!this.active) return;
 
         this.y += this.speed;
 
         // 前回発射時からのカウント（shootTimer）を監視して透過度を制御
-        const currentInterval = Math.max(1, Math.floor(this.baseShootInterval / this.fireRateMultiplier));
+        const currentInterval = Math.max(1, Math.floor(this.baseShootInterval / (this.fireRateMultiplier || 1)));
         if (this.shootTimer >= currentInterval - 1) {
             this.alpha = 1.0; // 発射直前に実体化
         } else {
@@ -118,7 +146,7 @@ export class CloudLurkerEnemy extends Enemy {
         super.update(game);
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         if (!this.active) return;
 
         ctx.save();
@@ -127,7 +155,12 @@ export class CloudLurkerEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage3GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): CloudLurkerEnemy {
         return new CloudLurkerEnemy(game, bType, hp);
     }
 }
@@ -136,19 +169,19 @@ export class CloudLurkerEnemy extends Enemy {
  * 3. SkyFalcon: 自機の上空に漂い、自機が直下に重なった瞬間に超高速で垂直急降下（ダイブ）するドッグファイト機
  */
 export class SkyFalconEnemy extends Enemy {
-    state = 'HOVER'; // HOVER, LOCKON, DIVE
-    timer = 0;
-    speedX = 1.8;
+    public state: 'HOVER' | 'LOCKON' | 'DIVE' = 'HOVER';
+    public timer: number = 0;
+    public speedX: number = 1.8;
 
-    get imageName() { return "enemy_sky_falcon.webp"; }
+    public override get imageName(): string { return "enemy_sky_falcon.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 2) {
+    constructor(game: Stage3GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
         this.width = 32;
         this.height = (155 / 135) * 32;
     }
 
-    update(game) {
+    public override update(game: Stage3GameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -160,7 +193,10 @@ export class SkyFalconEnemy extends Enemy {
                 }
 
                 // 自機が真下（X軸の差が30px以内）に入ったらロックオン
-                if (game.player && Math.abs((this.x + this.width / 2) - (game.player.x + game.player.width / 2)) < 30) {
+                if (
+                    game.player &&
+                    Math.abs(this.x + this.width / 2 - (game.player.x + game.player.width / 2)) < 30
+                ) {
                     this.state = 'LOCKON';
                     this.timer = 0;
                 }
@@ -183,7 +219,12 @@ export class SkyFalconEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage3GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): SkyFalconEnemy {
         return new SkyFalconEnemy(game, bType, hp);
     }
 }
@@ -192,18 +233,18 @@ export class SkyFalconEnemy extends Enemy {
  * 4. AegisCruiser: 大型巡洋機（設定された bulletType に応じて定期射撃）
  */
 export class AegisCruiserEnemy extends Enemy {
-    speedY = 0.6;
+    public speedY: number = 0.6;
+    public baseShootInterval: number = 90;
 
-    get imageName() { return "enemy_aegis_cruiser.webp"; }
+    public override get imageName(): string { return "enemy_aegis_cruiser.webp"; }
 
-    constructor(game, bulletType = 'eight-way', hp = 8) {
+    constructor(game: Stage3GameContext, bulletType: BulletType = 'eight-way', hp: number = 8) {
         super(game, bulletType, hp);
         this.width = (250 / 183) * 64;
         this.height = 64;
-        this.baseShootInterval = 90; // 90フレーム間隔
     }
 
-    update(game) {
+    public override update(game: Stage3GameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -212,10 +253,14 @@ export class AegisCruiserEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
-        const enemy = new AegisCruiserEnemy(game, bType, hp);
-        if (data.hp) enemy.hp = data.hp;
-        return enemy;
+    public static override create(
+        game: Stage3GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): AegisCruiserEnemy {
+        const resolvedHp = typeof data.hp === 'number' ? data.hp : hp;
+        return new AegisCruiserEnemy(game, bType, resolvedHp);
     }
 }
 
@@ -227,12 +272,17 @@ export class AegisCruiserEnemy extends Enemy {
  * STAGE-3 ボス: 蒼穹龍神（BossEnemy_03）
  */
 export class BossEnemy_03 extends BossEnemy {
-    state = 'APPEAR';
-    timer = 0;
+    public state: 'APPEAR' | 'SINE_DRIVE' | 'DRAGON_CHARGE' | 'RETREAT' = 'APPEAR';
+    public timer: number = 0;
 
-    get imageName() { return "enemy_boss_03.webp"; }
+    public override get imageName(): string { return "enemy_boss_03.webp"; }
 
-    constructor(game, hp = 700, timeLimit, timeMultiplier) {
+    constructor(
+        game: Stage3GameContext,
+        hp: number = 700,
+        timeLimit?: number,
+        timeMultiplier?: number
+    ) {
         super(game, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
         this.width = 160;
@@ -241,7 +291,7 @@ export class BossEnemy_03 extends BossEnemy {
     }
 
     /** 部位ごとの判定領域とダメージ倍率（マルチヒットボックス） */
-    getHitboxes() {
+    public getHitboxes(): BossHitboxPart[] {
         const headW = 40;
         const headH = 50;
         const headX = this.x + (this.width - headW) / 2;
@@ -258,7 +308,7 @@ export class BossEnemy_03 extends BossEnemy {
         ];
     }
 
-    update(game) {
+    public override update(game: Stage3GameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -313,12 +363,17 @@ export class BossEnemy_03 extends BossEnemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage3GameContext,
+        _bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): BossEnemy_03 {
         return new BossEnemy_03(
-            game, 
-            hp || 700, 
-            data.timeLimit || 1800, 
-            data.timeMultiplier || 100
+            game,
+            hp || 700,
+            typeof data.timeLimit === 'number' ? data.timeLimit : 1800,
+            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : 100
         );
     }
 }

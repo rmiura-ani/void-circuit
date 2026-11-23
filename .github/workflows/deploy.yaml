@@ -10,7 +10,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write  # バージョンアップのコミットをプッシュするため write に変更
   pages: write
   id-token: write
 
@@ -24,12 +24,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Bump version on main
+        if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          NEW_VER=$(node -p "require('./package.json').version")
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to v${NEW_VER} [skip ci]"
+          git push
 
       - name: Install dependencies
         run: npm ci

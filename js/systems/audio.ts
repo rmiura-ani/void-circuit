@@ -1,20 +1,113 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * audio.js
+ * audio.ts - Web Audio API & Sound Lifecycle Management
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 
+export type EQBand = 'low' | 'mid' | 'high';
+
+export interface EQSettings {
+    low: number;
+    mid: number;
+    high: number;
+}
+
+export interface RoomPreset {
+    name: string;
+    delayTime: number;
+    feedback: number;
+    reverbWet: number;
+    echoWet: number;
+    desc: string;
+}
+
+export interface SEConfigItem {
+    file: string;
+    vol: number;
+}
+
+export type SEKey = 'shot' | 'changeWp' | 'explosion' | 'hitSound' | 'powerUp' | 'siren';
+
+export interface DynamicBGMItem {
+    displayName: string;
+    fileName: string;
+    stagePath?: string | null;
+}
+
+declare global {
+    interface Window {
+        webkitAudioContext?: typeof AudioContext;
+    }
+}
+
 /**
  * AudioManager: サウンドライフサイクル管理
  */
 export class AudioManager {
-    constructor(basePath) {
+    public basePath: string;
+    public currentBgm: HTMLAudioElement | null;
+    public currentBgmFileName: string;
+    public preparedBgm: HTMLAudioElement | null;
+    public preparedBgmFileName: string;
+    public fadeInterval: ReturnType<typeof setInterval> | null;
+    public bgms: Record<string, HTMLAudioElement>;
+    public sounds: Partial<Record<SEKey, HTMLAudioElement>>;
+
+    // 🔊 マスターボリュームの％管理 (0.0 〜 1.0)
+    public seVolume: number;
+    public bgmVolume: number;
+
+    // BGMテスト用の再生終了時コールバック
+    public onBGMEnded: (() => void) | null;
+
+    // 🎛️ EQの設定値
+    public eqSettings: EQSettings;
+
+    // 🏛️ 空間アコースティックプリセットの定義
+    public readonly ROOM_PRESETS: Record<number, RoomPreset>;
+    public currentPresetId: number;
+
+    public DYNAMIC_BGM_LIST: DynamicBGMItem[];
+    public readonly CONFIG: {
+        SE: Record<SEKey, SEConfigItem>;
+    };
+    public readonly seKeys: SEKey[];
+
+    public audioCtx: AudioContext | null;
+    public analyser: AnalyserNode | null;
+
+    // EQ ノード
+    public eqLow: BiquadFilterNode | null;
+    public eqMid: BiquadFilterNode | null;
+    public eqHigh: BiquadFilterNode | null;
+
+    // 🎛️ エフェクト（DSP）ノード群
+    public dryNode: GainNode | null;
+    public echoNode: DelayNode | null;
+    public echoFeedback: GainNode | null;
+    public echoWetNode: GainNode | null;
+    public reverbNodes: DelayNode[];
+    public reverbWetNode: GainNode | null;
+
+    public mediaSources: Map<HTMLAudioElement, MediaElementAudioSourceNode>;
+
+    // 動的に生成される SE 再生メソッドの型宣言
+    declare public playShot: () => void;
+    declare public playChangeWp: () => void;
+    declare public playExplosion: () => void;
+    declare public playHitSound: () => void;
+    declare public playPowerUp: () => void;
+    declare public playSiren: () => void;
+
+    constructor(basePath: string) {
         this.basePath = basePath;
         this.currentBgm = null;
         this.currentBgmFileName = "";
+        this.preparedBgm = null;
+        this.preparedBgmFileName = "";
         this.fadeInterval = null;
         this.bgms = {};
         this.sounds = {};
@@ -38,19 +131,19 @@ export class AudioManager {
         };
         this.currentPresetId = 0;
 
-        this.DYNAMIC_BGM_LIST = []; 
+        this.DYNAMIC_BGM_LIST = [];
         this.CONFIG = {
             SE: {
                 shot:       { file: 'shot.ogg',       vol: 0.3 },
                 changeWp:   { file: 'changeWp.ogg',   vol: 0.8 },
                 explosion:  { file: 'explosion.ogg',  vol: 0.3 },
                 hitSound:   { file: 'hitHurt.ogg',    vol: 0.5 },
-                powerUp:    { file: 'powerUp.ogg',    vol: 0.7 },          
-                siren:      { file: 'siren.ogg',    vol: 0.4 }      
+                powerUp:    { file: 'powerUp.ogg',    vol: 0.7 },
+                siren:      { file: 'siren.ogg',      vol: 0.4 }
             }
         };
-        this.seKeys = Object.keys(this.CONFIG.SE);
-        
+        this.seKeys = Object.keys(this.CONFIG.SE) as SEKey[];
+
         this.audioCtx = null;
         this.analyser = null;
 
@@ -66,21 +159,23 @@ export class AudioManager {
         this.echoWetNode = null;
         this.reverbNodes = [];
         this.reverbWetNode = null;
-        
+
         this.mediaSources = new Map(); // 各Audio要素とSourceNodeの紐付けキャッシュ
 
         // メソッドの動的生やし
         this.seKeys.forEach(key => {
-            const methodName = 'play' + key.charAt(0).toUpperCase() + key.slice(1);
-            this[methodName] = () => this._playSE(key);
+            const methodName = ('play' + key.charAt(0).toUpperCase() + key.slice(1)) as keyof this;
+            (this[methodName] as unknown as () => void) = () => this._playSE(key);
         });
         this.initSEAudio();
     }
 
     /** AudioContextの初期化 & 自動再生ロック解除 */
-    _ensureAudioContext() {
+    private _ensureAudioContext(): void {
         if (!this.audioCtx) {
-            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            this.audioCtx = new AudioCtx();
             this._setupAudioNodes();
         }
         if (this.audioCtx.state === 'suspended') {
@@ -89,10 +184,12 @@ export class AudioManager {
     }
 
     /** Web Audio API ノード群の構築 */
-    _setupAudioNodes() {
+    private _setupAudioNodes(): void {
+        if (!this.audioCtx) return;
+
         this.analyser = this.audioCtx.createAnalyser();
         this.analyser.fftSize = 64;
-        
+
         this.eqLow = this.audioCtx.createBiquadFilter();
         this.eqLow.type = 'lowshelf';
         this.eqLow.frequency.value = 200;
@@ -112,7 +209,7 @@ export class AudioManager {
         this.echoNode = this.audioCtx.createDelay(2.0);
         this.echoFeedback = this.audioCtx.createGain();
         this.echoWetNode = this.audioCtx.createGain();
-        
+
         this.echoNode.connect(this.echoFeedback);
         this.echoFeedback.connect(this.echoNode);
         this.echoNode.connect(this.echoWetNode);
@@ -120,14 +217,14 @@ export class AudioManager {
         this.reverbWetNode = this.audioCtx.createGain();
         const delayTimes = [0.011, 0.015, 0.023, 0.037, 0.043, 0.059];
         this.reverbNodes = delayTimes.map(t => {
-            const d = this.audioCtx.createDelay();
+            const d = this.audioCtx!.createDelay();
             d.delayTime.value = t;
-            const g = this.audioCtx.createGain();
+            const g = this.audioCtx!.createGain();
             g.gain.value = 0.65;
-            
+
             d.connect(g);
             g.connect(d);
-            g.connect(this.reverbWetNode);
+            g.connect(this.reverbWetNode!);
             return d;
         });
 
@@ -136,7 +233,7 @@ export class AudioManager {
     }
 
     /** SE初期化 */
-    initSEAudio() {
+    public initSEAudio(): void {
         this.seKeys.forEach(key => {
             const conf = this.CONFIG.SE[key];
             const audio = new Audio(this.basePath + conf.file);
@@ -146,33 +243,34 @@ export class AudioManager {
         });
     }
 
-    setDynamicBGMList(list) {
-        this.DYNAMIC_BGM_LIST = list; 
+    public setDynamicBGMList(list: DynamicBGMItem[]): void {
+        this.DYNAMIC_BGM_LIST = list;
     }
 
-    setSEVolume(volume) {
+    public setSEVolume(volume: number): void {
         this.seVolume = Math.max(0, Math.min(1, volume));
         this.seKeys.forEach(key => {
-            if (this.sounds[key]) {
+            const sound = this.sounds[key];
+            if (sound) {
                 const baseVol = this.CONFIG.SE[key].vol;
-                this.sounds[key].volume = baseVol * this.seVolume;
+                sound.volume = baseVol * this.seVolume;
             }
         });
         console.log(`[Audio] Master SE Volume -> ${Math.round(this.seVolume * 100)}%`);
     }
 
-    setBGMVolume(volume) {
+    public setBGMVolume(volume: number): void {
         this.bgmVolume = Math.max(0, Math.min(1, volume));
         if (this.currentBgm && !this.fadeInterval) {
             this.currentBgm.volume = 0.7 * this.bgmVolume;
         }
         console.log(`[Audio] Master BGM Volume -> ${Math.round(this.bgmVolume * 100)}%`);
     }
-    
-    async preloadSE() {
-        const loadAud = (a) => new Promise(r => {
+
+    public async preloadSE(): Promise<void> {
+        const loadAud = (a: HTMLAudioElement | undefined): Promise<void> => new Promise(r => {
             if (!a || a.readyState >= 3) return r();
-            a.addEventListener('canplaythrough', r, { once: true });
+            a.addEventListener('canplaythrough', () => r(), { once: true });
             a.addEventListener('error', () => r(), { once: true });
             a.load();
             setTimeout(r, 3000);
@@ -181,11 +279,11 @@ export class AudioManager {
         console.log("[Audio] System SE Preload complete.");
     }
 
-    async loadStageBGM(fileName, stagePath = null) {
+    public async loadStageBGM(fileName: string, stagePath: string | null = null): Promise<HTMLAudioElement | null> {
         if (!fileName) return null;
 
         // パス解決用の内部ヘルパー
-        const resolvePath = (base, file) => {
+        const resolvePath = (base: string, file: string): string => {
             if (/^(?:[a-z]+:)?\/\//i.test(file)) return file; // absolute URL (http://等) はそのまま
             const b = base.endsWith('/') ? base : base + '/';
             const f = file.startsWith('/') ? file.slice(1) : file;
@@ -193,8 +291,8 @@ export class AudioManager {
         };
 
         // 1. stagePath があれば basePath と結合してフルフォルダパスを作る
-        const currentFolder = stagePath 
-            ? resolvePath(this.basePath, stagePath) 
+        const currentFolder = stagePath
+            ? resolvePath(this.basePath, stagePath)
             : this.basePath;
         const targetPath = resolvePath(currentFolder, fileName);
 
@@ -252,8 +350,11 @@ export class AudioManager {
     }
 
     /** Audio要素をWeb Audio APIのアナライザーノードへブリッジする */
-    setupAnalyserBridge(audioElement) {
+    public setupAnalyserBridge(audioElement: HTMLAudioElement): void {
         this._ensureAudioContext();
+        if (!this.audioCtx || !this.eqLow || !this.eqMid || !this.eqHigh || !this.dryNode || !this.echoNode || !this.echoWetNode || !this.reverbWetNode || !this.analyser) {
+            return;
+        }
 
         // 🌟 重複接続防止: 既に登録済みであればパラメータ更新のみを行って復帰する
         if (this.mediaSources.has(audioElement)) {
@@ -280,7 +381,7 @@ export class AudioManager {
 
         // 3. リバーブ（残響）ルート -> Analyser
         this.reverbNodes.forEach(dNode => {
-            this.eqHigh.connect(dNode);
+            this.eqHigh!.connect(dNode);
         });
         this.reverbWetNode.connect(this.analyser);
 
@@ -292,14 +393,14 @@ export class AudioManager {
         this.applyRoomPresetValues(now);
     }
 
-    _applyCurrentEQ(time) {
+    private _applyCurrentEQ(time: number): void {
         if (this.eqLow)  this.eqLow.gain.setValueAtTime(this.eqSettings.low, time);
         if (this.eqMid)  this.eqMid.gain.setValueAtTime(this.eqSettings.mid, time);
         if (this.eqHigh) this.eqHigh.gain.setValueAtTime(this.eqSettings.high, time);
     }
 
-    applyRoomPresetValues(time) {
-        if (!this.audioCtx) return;
+    public applyRoomPresetValues(time: number): void {
+        if (!this.audioCtx || !this.echoNode || !this.echoFeedback || !this.echoWetNode || !this.reverbWetNode || !this.dryNode) return;
         const p = this.ROOM_PRESETS[this.currentPresetId];
         if (!p) return;
 
@@ -313,7 +414,7 @@ export class AudioManager {
         this.dryNode.gain.setValueAtTime(dryVol, time);
     }
 
-    setAudioRoomPreset(presetId) {
+    public setAudioRoomPreset(presetId: number): void {
         if (this.ROOM_PRESETS[presetId] === undefined) return;
         this.currentPresetId = presetId;
 
@@ -324,18 +425,18 @@ export class AudioManager {
         console.log(`[Audio] Room Preset Changed -> ${this.ROOM_PRESETS[presetId].name}`);
     }
 
-    setEQGain(band, value) {
+    public setEQGain(band: EQBand, value: number): void {
         if (this.eqSettings[band] !== undefined) {
             this.eqSettings[band] = value;
         }
-        
+
         if (this.audioCtx) {
             const now = this.audioCtx.currentTime;
             this._applyCurrentEQ(now);
         }
     }
 
-    playBGM() {
+    public playBGM(): void {
         if (!this.preparedBgm) {
             console.warn("[Audio] No BGM is prepared. Call loadStageBGM first.");
             return;
@@ -354,7 +455,7 @@ export class AudioManager {
 
         this.currentBgm.currentTime = 0;
         this.currentBgm.volume = 0.7 * this.bgmVolume;
-        
+
         this.setupAnalyserBridge(this.currentBgm);
 
         this.currentBgm.onended = () => {
@@ -367,21 +468,21 @@ export class AudioManager {
     }
 
     /** ⏸️ BGMの一時停止（ポーズ用） */
-    pauseBGM() {
+    public pauseBGM(): void {
         if (this.currentBgm && !this.currentBgm.paused) {
             this.currentBgm.pause();
         }
     }
 
     /** ▶️ BGMの再開（ポーズ解除用） */
-    resumeBGM() {
+    public resumeBGM(): void {
         if (this.currentBgm && this.currentBgm.paused) {
             this._ensureAudioContext();
             this.currentBgm.play().catch(e => console.warn("[Audio] Resume BGM failed:", e));
         }
     }
-    
-    resetBGM() {
+
+    public resetBGM(): void {
         if (this.fadeInterval) {
             clearInterval(this.fadeInterval);
             this.fadeInterval = null;
@@ -395,7 +496,7 @@ export class AudioManager {
         this.currentBgmFileName = "";
     }
 
-    fadeOutBGM(duration = 2000) {
+    public fadeOutBGM(duration: number = 2000): void {
         if (!this.currentBgm || this.fadeInterval) return;
 
         const target = this.currentBgm;
@@ -410,20 +511,22 @@ export class AudioManager {
                 target.volume = 0;
                 target.pause();
                 target.onended = null;
-                clearInterval(this.fadeInterval);
-                this.fadeInterval = null;
+                if (this.fadeInterval) {
+                    clearInterval(this.fadeInterval);
+                    this.fadeInterval = null;
+                }
             }
         }, intervalTime);
     }
 
-    _playSE(key) {
+    private _playSE(key: SEKey): void {
         this._ensureAudioContext();
         const baseAudio = this.sounds[key];
         if (baseAudio) {
-            const clone = baseAudio.cloneNode(true);
+            const clone = baseAudio.cloneNode(true) as HTMLAudioElement;
             clone.volume = baseAudio.volume;
             clone.play().catch(() => {});
-            
+
             clone.addEventListener('ended', () => {
                 clone.pause();
                 clone.src = "";
@@ -433,15 +536,15 @@ export class AudioManager {
     }
 
     // Sound Test Helpers
-    get bgmCount() { return this.DYNAMIC_BGM_LIST.length; }
-    get seCount() { return this.seKeys.length; }
-    get roomPresetCount() { return Object.keys(this.ROOM_PRESETS).length; } 
-    
-    getBGMName(idx) { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
-    getSEName(idx) { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
-    getRoomPresetName(idx) { return this.ROOM_PRESETS[idx]?.name || "UNKNOWN"; } 
-    
-    async playBGMByIndex(idx) {
+    public get bgmCount(): number { return this.DYNAMIC_BGM_LIST.length; }
+    public get seCount(): number { return this.seKeys.length; }
+    public get roomPresetCount(): number { return Object.keys(this.ROOM_PRESETS).length; }
+
+    public getBGMName(idx: number): string { return this.DYNAMIC_BGM_LIST[idx]?.displayName.toUpperCase() || "NONE"; }
+    public getSEName(idx: number): string { return this.seKeys[idx]?.toUpperCase() || "NONE"; }
+    public getRoomPresetName(idx: number): string { return this.ROOM_PRESETS[idx]?.name || "UNKNOWN"; }
+
+    public async playBGMByIndex(idx: number): Promise<void> {
         const bgmData = this.DYNAMIC_BGM_LIST[idx];
         if (!bgmData) return;
 
@@ -454,13 +557,16 @@ export class AudioManager {
         // loadStageBGM で準備された BGM を再生
         this.playBGM();
     }
-    
-    getByteFrequencyData() {
+
+    public getByteFrequencyData(): Uint8Array | null {
         if (!this.analyser) return null;
         const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
         this.analyser.getByteFrequencyData(dataArray);
         return dataArray;
     }
-    
-    playSEByIndex(idx) { this._playSE(this.seKeys[idx]); }
+
+    public playSEByIndex(idx: number): void {
+        const key = this.seKeys[idx];
+        if (key) this._playSE(key);
+    }
 }

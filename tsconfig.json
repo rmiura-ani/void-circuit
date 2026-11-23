@@ -14,13 +14,13 @@
     "noEmit": true,
 
     /* 既存JSの段階的移行用設定 */
-    "allowJs": true,
+    "allowJs": false,
     "checkJs": false,
 
-    /* Linting (最初は緩めにしておくのがおすすめ) */
+    /* まずは既存コードをエラーにしないための緩めの設定 */
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src", "**/*.js", "**/*.ts"]
+  "include": ["js/**/*", "src/**/*", "*.ts"]
 }

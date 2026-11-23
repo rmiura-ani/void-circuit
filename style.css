@@ -690,7 +690,6 @@ canvas {
 
 .fullscreen-title {
     font-size: 3vw; /* ブラウザ幅に美しく比例 */
-    min-size: 20px;
     color: #FFD700;
     text-shadow: 
         -2px -2px 0 #000,  2px -2px 0 #000,
@@ -703,7 +702,6 @@ canvas {
 
 .fullscreen-subtitle {
     font-size: 1.5vw;
-    min-size: 11px;
     color: #F8F8F8;
     text-shadow: 
         -1.5px -1.5px 0 #000,  1.5px -1.5px 0 #000,

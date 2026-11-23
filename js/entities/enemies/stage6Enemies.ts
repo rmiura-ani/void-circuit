@@ -1,15 +1,31 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/stage6Enemies.js - STAGE-6 (Burning Orbit) 固有敵クラス群 & ボス
+ * entities/enemies/stage6Enemies.ts - STAGE-6 (Burning Orbit) 固有敵クラス群 & ボス
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
 
-import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
+import {
+    Enemy,
+    BossEnemy,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData
+} from '../enemy.js';
+
+export interface Stage6GameContext extends EnemyGameContext {
+    player?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        alive?: boolean;
+    } | null;
+}
 
 // ==========================================
 // 1. STAGE-6 固有のザコ・中型敵クラス群
@@ -19,17 +35,17 @@ import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
  * 1. OrbitInterceptor: 大気圏突入（赤熱エフェクト）後、急ブレーキをかけてミサイルを放ち上空へ離脱する邀撃機
  */
 export class OrbitInterceptorEnemy extends Enemy {
-    speedY = 6.0;
-    state = 'ENTRY'; // ENTRY, BRAKE, RETREAT
-    stateTimer = 0;
+    public speedY: number = 6.0;
+    public state: 'ENTRY' | 'BRAKE' | 'RETREAT' = 'ENTRY';
+    public stateTimer: number = 0;
 
-    get imageName() { return "enemy_orbit_interceptor.webp"; }
+    public override get imageName(): string { return "enemy_orbit_interceptor.webp"; }
 
-    constructor(game, bulletType = 'triple', hp = 2) {
+    constructor(game: Stage6GameContext, bulletType: BulletType = 'triple', hp: number = 2) {
         super(game, bulletType, hp);
     }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.stateTimer++;
 
@@ -57,7 +73,7 @@ export class OrbitInterceptorEnemy extends Enemy {
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.state === 'ENTRY') {
             ctx.filter = 'brightness(1.8) saturate(2) drop-shadow(0px 0px 8px #FF4500)';
@@ -66,7 +82,12 @@ export class OrbitInterceptorEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): OrbitInterceptorEnemy {
         return new OrbitInterceptorEnemy(game, bType || 'triple', hp || 2);
     }
 }
@@ -75,16 +96,16 @@ export class OrbitInterceptorEnemy extends Enemy {
  * 2. HeatArmor: 正面装甲（真下からの攻撃）を完全無効化する重装甲機
  */
 export class HeatArmorEnemy extends Enemy {
-    speedY = 0.6;
+    public speedY: number = 0.6;
+    public baseShootInterval: number = 70;
 
-    get imageName() { return "enemy_heat_armor.webp"; }
+    public override get imageName(): string { return "enemy_heat_armor.webp"; }
 
-    constructor(game, bulletType = 'straight', hp = 6) {
+    constructor(game: Stage6GameContext, bulletType: BulletType = 'straight', hp: number = 6) {
         super(game, bulletType, hp);
-        this.baseShootInterval = 70;
     }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -92,16 +113,23 @@ export class HeatArmorEnemy extends Enemy {
     }
 
     /** 正面耐熱装甲：自機が正面（幅±20px以内）から攻撃した場合は無効化 */
-    takeDamage(game, amount) {
-        const playerX = game.player.x + game.player.width / 2;
-        const myX = this.x + this.width / 2;
-        if (Math.abs(playerX - myX) < 20) {
-            return false;
+    public override takeDamage(game: Stage6GameContext, amount: number): boolean {
+        if (game.player) {
+            const playerX = game.player.x + game.player.width / 2;
+            const myX = this.x + this.width / 2;
+            if (Math.abs(playerX - myX) < 20) {
+                return false;
+            }
         }
         return super.takeDamage(game, amount);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): HeatArmorEnemy {
         return new HeatArmorEnemy(game, bType || 'straight', hp || 6);
     }
 }
@@ -110,23 +138,28 @@ export class HeatArmorEnemy extends Enemy {
  * 3. HomingPod: プレイヤーを追尾する弾を一定間隔で射出するポッド機
  */
 export class HomingPodEnemy extends Enemy {
-    speedY = 0.8;
+    public speedY: number = 0.8;
+    public baseShootInterval: number = 80;
 
-    get imageName() { return "enemy_homing_pod.webp"; }
+    public override get imageName(): string { return "enemy_homing_pod.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 2) {
+    constructor(game: Stage6GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
-        this.baseShootInterval = 80;
     }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
 
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): HomingPodEnemy {
         return new HomingPodEnemy(game, bType, hp);
     }
 }
@@ -135,25 +168,30 @@ export class HomingPodEnemy extends Enemy {
  * 4. BeamCruiser: 高耐久・拡散弾放射の中型巡洋艦
  */
 export class BeamCruiserEnemy extends Enemy {
-    speedY = 0.4;
+    public speedY: number = 0.4;
+    public baseShootInterval: number = 40;
 
-    get imageName() { return "enemy_beam_cruiser.webp"; }
+    public override get imageName(): string { return "enemy_beam_cruiser.webp"; }
 
-    constructor(game, bulletType = 'triple', hp = 8) {
+    constructor(game: Stage6GameContext, bulletType: BulletType = 'triple', hp: number = 8) {
         super(game, bulletType, hp);
         this.width = 80;
         this.height = 48;
-        this.baseShootInterval = 40;
     }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
 
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): BeamCruiserEnemy {
         return new BeamCruiserEnemy(game, bType || 'triple', hp || 8);
     }
 }
@@ -162,21 +200,22 @@ export class BeamCruiserEnemy extends Enemy {
  * 5. BurnerDrone: 画面下部から上昇しながら弾を突き上げるバーナー機
  */
 export class BurnerDroneEnemy extends Enemy {
-    speedY = -1.8;
+    public speedY: number = -1.8;
+    public baseShootInterval: number = 20;
+    public baseX?: number;
 
-    get imageName() { return "enemy_burner_drone.webp"; }
+    public override get imageName(): string { return "enemy_burner_drone.webp"; }
 
-    constructor(game, bulletType = 'straight', hp = 3) {
+    constructor(game: Stage6GameContext, bulletType: BulletType = 'straight', hp: number = 3) {
         super(game, bulletType, hp);
-        this.baseShootInterval = 20;
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.baseX = x;
-    }    
+    }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
 
@@ -187,11 +226,15 @@ export class BurnerDroneEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): BurnerDroneEnemy {
         return new BurnerDroneEnemy(game, bType || 'straight', hp || 3);
     }
 }
-
 
 // ==========================================
 // 2. STAGE-6 ボス実体
@@ -201,14 +244,20 @@ export class BurnerDroneEnemy extends Enemy {
  * STAGE-6 ボス: 超巨大空中戦艦（Burning Dread / BossEnemy_06）
  */
 export class BossEnemy_06 extends BossEnemy {
-    state = 'APPEAR';
-    timer = 0;
+    public state: 'APPEAR' | 'HEAVY_BOMBARD' | 'OVERDRIVE' = 'APPEAR';
+    public timer: number = 0;
+    public baseX?: number;
 
-    get imageName() { return "enemy_boss_06.webp"; }
+    public override get imageName(): string { return "enemy_boss_06.webp"; }
 
-    constructor(game, hp = 120, timeLimit, timeMultiplier) {
+    constructor(
+        game: Stage6GameContext,
+        hp: number = 120,
+        timeLimit?: number,
+        timeMultiplier?: number
+    ) {
         super(game, hp, timeLimit, timeMultiplier);
-        
+
         this.isBoss = true;
         this.width = (802 / 322) * 100;
         this.height = 100;
@@ -216,12 +265,12 @@ export class BossEnemy_06 extends BossEnemy {
         this.hitHeight = 80;
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.baseX = x;
-    }     
+    }
 
-    update(game) {
+    public override update(game: Stage6GameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -234,7 +283,7 @@ export class BossEnemy_06 extends BossEnemy {
                 }
                 break;
 
-            case 'HEAVY_BOMBARD':
+            case 'HEAVY_BOMBARD': {
                 const bx1 = this.baseX ?? this.startX;
                 this.x = bx1 + Math.sin(this.timer * 0.1) * 15;
 
@@ -249,8 +298,9 @@ export class BossEnemy_06 extends BossEnemy {
                     this.timer = 0;
                 }
                 break;
+            }
 
-            case 'OVERDRIVE':
+            case 'OVERDRIVE': {
                 const bx2 = this.baseX ?? this.startX;
                 this.x = bx2 + Math.sin(this.timer * 0.2) * 30;
 
@@ -263,10 +313,11 @@ export class BossEnemy_06 extends BossEnemy {
                     this.shoot(game);
                 }
                 break;
+            }
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.state === 'OVERDRIVE') {
             ctx.filter = 'saturate(3) contrast(1.5) brightness(1.3)';
@@ -275,16 +326,20 @@ export class BossEnemy_06 extends BossEnemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage6GameContext,
+        _bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): BossEnemy_06 {
         return new BossEnemy_06(
-            game, 
-            hp || 120, 
-            data.timeLimit, 
-            data.timeMultiplier
+            game,
+            hp || 120,
+            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
+            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
         );
     }
 }
-
 
 // ==========================================
 // 3. ENEMY_REGISTRY への自動登録

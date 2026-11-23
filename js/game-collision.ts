@@ -1,34 +1,105 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * 物理・衝突判定管理コンポーネント (game-collision.js)
+ * 物理・衝突判定管理コンポーネント (game-collision.ts)
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
 
+import { Entity, type GameContext } from './entities/base.js';
 import { Player, Bullet } from './entities/player.js';
 import { Enemy, EnemyBullet } from './entities/enemy.js';
 import { ScoreText, Particle } from './entities/effects.js';
 
+export interface Hitbox {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    multiplier?: number;
+    part?: string;
+}
+
+export interface HitResult {
+    hit: boolean;
+    multiplier: number;
+    part?: string;
+}
+
+export interface CollidableRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    hitWidth?: number;
+    hitHeight?: number;
+}
+
+export interface PlayerBulletLike extends Bullet {
+    damage?: number;
+    hitWidth?: number;
+    hitHeight?: number;
+}
+
+export interface EnemyLike extends Entity {
+    isInvincible?: boolean;
+    isBoss?: boolean;
+    maxHp?: number;
+    timeLimit?: number;
+    hitWidth?: number;
+    hitHeight?: number;
+    getHitboxes?: () => Hitbox[];
+    takeDamage(game: GameCollisionContext, damage: number): boolean;
+    onDie?: (game: GameCollisionContext, silent?: boolean) => void;
+}
+
+/** GameCollisionManager が参照する Game のインターフェース */
+export interface GameCollisionContext extends GameContext {
+    player: Player;
+    uiHeaderHeight: number;
+    score: number;
+    frame: number;
+    bossStartTime: number;
+    stats: {
+        shotsFired: number;
+        shotsHit: number;
+        enemiesSpawned: number;
+        enemiesKilled: number;
+    };
+    scenario: {
+        skipToAfterLoop(): void;
+    };
+    sc: GameContext['sc'] & {
+        audio: GameContext['sc']['audio'] & {
+            playCriticalHit?: () => void;
+            playHitSound(): void;
+            playExplosion(): void;
+        };
+    };
+    onPlayerMiss(): void;
+}
+
 export class GameCollisionManager {
-    constructor(game) {
+    public game: GameCollisionContext;
+
+    constructor(game: GameCollisionContext) {
         this.game = game;
     }
 
-    check() {
+    public check(): void {
         if (!this.game.player.alive) return;
 
-        const enemies = [];
-        const enemyBullets = [];
-        const playerBullets = [];
+        const enemies: EnemyLike[] = [];
+        const enemyBullets: Entity[] = [];
+        const playerBullets: PlayerBulletLike[] = [];
 
         for (const e of this.game.entities) {
             if (!e.active) continue;
-            if (e instanceof Enemy) enemies.push(e);
+            if (e instanceof Enemy) enemies.push(e as unknown as EnemyLike);
             else if (e instanceof EnemyBullet) enemyBullets.push(e);
-            else if (e instanceof Bullet) playerBullets.push(e);
+            else if (e instanceof Bullet) playerBullets.push(e as PlayerBulletLike);
         }
 
         // 自機の当たり判定
@@ -40,7 +111,7 @@ export class GameCollisionManager {
             for (const e of enemies) {
                 if (this._isCircleHit(px, py, hitRadiusSq, e)) {
                     this.game.onPlayerMiss();
-                    return; 
+                    return;
                 }
             }
             for (const eb of enemyBullets) {
@@ -59,10 +130,10 @@ export class GameCollisionManager {
             if (enemy.isInvincible) continue;
 
             if (
-                enemy.y + enemy.height < this.game.uiHeaderHeight ||            
-                enemy.y >= this.game.height ||          
-                enemy.x + enemy.width <= 0 ||             
-                enemy.x >= this.game.width              
+                enemy.y + enemy.height < this.game.uiHeaderHeight ||
+                enemy.y >= this.game.height ||
+                enemy.x + enemy.width <= 0 ||
+                enemy.x >= this.game.width
             ) {
                 continue;
             }
@@ -86,41 +157,42 @@ export class GameCollisionManager {
                         this.game.stats.enemiesKilled++;
                         this._calculateAttachScore(enemy);
                         if (typeof enemy.onDie === 'function') enemy.onDie(this.game);
-                        
+
                         // 🛑 ボス撃破時のグランドフィナーレ・お片付け処理
                         if (enemy.isBoss) {
                             this.game.scenario.skipToAfterLoop();
-                            
+
                             // 🌟 画面内・画面外（上空含む）すべての敵・敵弾を確実に一斉処理！
-                            this.game.entities.forEach(e => {
+                            this.game.entities.forEach((e: Entity) => {
                                 // 自分自身（ボス自身）は除外
                                 if (e === enemy) return;
 
                                 // ① すべてのザコ敵の処理
                                 if (e instanceof Enemy && e.active) {
+                                    const subEnemy = e as unknown as EnemyLike;
                                     this.game.stats.enemiesKilled++;
-                                    this._calculateAttachScore(e); // 密着ボーナス等のスコア計算
+                                    this._calculateAttachScore(subEnemy); // 密着ボーナス等のスコア計算
 
                                     const isVisible = (
-                                        e.y >= this.game.uiHeaderHeight &&
-                                        e.y < this.game.height &&
-                                        e.x >= 0 &&
-                                        e.x < this.game.width
+                                        subEnemy.y >= this.game.uiHeaderHeight &&
+                                        subEnemy.y < this.game.height &&
+                                        subEnemy.x >= 0 &&
+                                        subEnemy.x < this.game.width
                                     );
 
                                     if (isVisible) {
-                                        if (typeof e.onDie === 'function') e.onDie(this.game, true);
+                                        if (typeof subEnemy.onDie === 'function') subEnemy.onDie(this.game, true);
                                     }
-                                    
-                                    e.active = false;
+
+                                    subEnemy.active = false;
                                 }
-                                
+
                                 // ② すべての敵弾の処理（敵弾は即消去）
                                 if (e instanceof EnemyBullet) {
                                     e.active = false;
                                 }
                             });
-                            
+
                             console.log("[Collision] Boss defeated. Smart cleanup completed without auditory overload.");
                         }
                     } else {
@@ -160,7 +232,7 @@ export class GameCollisionManager {
         }
     }
 
-    _isCircleHit(px, py, radiusSq, target) {
+    private _isCircleHit(px: number, py: number, radiusSq: number, target: CollidableRect): boolean {
         const tx = target.x + target.width / 2;
         const ty = target.y + target.height / 2;
         const dx = px - tx;
@@ -172,7 +244,7 @@ export class GameCollisionManager {
      * 弾と対象のヒット状態およびダメージ倍率を取得する
      * マルチヒットボックス (getHitboxes) がある場合は各ボックスを判定
      */
-    _checkHitResult(bullet, enemy) {
+    private _checkHitResult(bullet: CollidableRect, enemy: EnemyLike): HitResult {
         // 💡 対象（ボス等）が getHitboxes メソッドを持っている場合
         if (typeof enemy.getHitboxes === 'function') {
             const hitboxes = enemy.getHitboxes();
@@ -198,7 +270,7 @@ export class GameCollisionManager {
         return { hit: this._isHit(bullet, enemy), multiplier: 1.0 };
     }
 
-    _isHit(r1, r2) {
+    private _isHit(r1: CollidableRect, r2: CollidableRect): boolean {
         const w1 = r1.hitWidth ?? r1.width;
         const h1 = r1.hitHeight ?? r1.height;
         const w2 = r2.hitWidth ?? r2.width;
@@ -215,18 +287,18 @@ export class GameCollisionManager {
                r1Top + h1 > r2Top;
     }
 
-    _calculateAttachScore(enemy){
+    private _calculateAttachScore(enemy: EnemyLike): void {
         const maxHp = enemy.maxHp || 1;
         const amount = 100 + (maxHp * 150);
         this.game.score += amount;
 
         const centerX = enemy.x + enemy.width / 2;
-        let centerY = enemy.isBoss ? enemy.y + (enemy.height * 0.8) : enemy.y + enemy.height / 2;
-        
+        const centerY = enemy.isBoss ? enemy.y + (enemy.height * 0.8) : enemy.y + enemy.height / 2;
+
         this.game.entities.push(new ScoreText(centerX, centerY, amount));
 
         // ボスはタイムボーナスがある
-        if (enemy.isBoss){
+        if (enemy.isBoss) {
             const elapsed = this.game.frame - this.game.bossStartTime;
             const limit = enemy.timeLimit || 3600;
             const maxBonus = amount * 0.25;
@@ -235,16 +307,16 @@ export class GameCollisionManager {
             const bonus = Math.floor(rawBonus / 100) * 100;
             if (bonus > 0) {
                 this.game.score += bonus;
-                this.game.entities.push(new ScoreText( this.game.width / 2, this.game.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
+                this.game.entities.push(new ScoreText(this.game.width / 2, this.game.height / 2, ["TIME BONUS", bonus.toLocaleString()], "#0FF"));
             }
         }
     }
 
-    createExplosion(x, y, enemy, soundoff = false) {
+    public createExplosion(x: number, y: number, enemy: EnemyLike, soundoff: boolean = false): void {
         const hp = enemy.maxHp || 1;
-        
+
         // パーティクル数に上限（キャップ）を設ける（最大60個程度に抑える）
-        const rawCount = 10 + Math.floor(hp * 0.2); 
+        const rawCount = 10 + Math.floor(hp * 0.2);
         const count = enemy.isBoss ? Math.min(rawCount, 60) : Math.min(rawCount, 30);
         const type = enemy.isBoss ? 'boss' : 'enemy';
 
@@ -253,7 +325,7 @@ export class GameCollisionManager {
             this.game.entities.push(new Particle(x, y, type));
         }
 
-        // 【修正2】SEの制御（単体の爆発生成では1回だけ鳴らす）
+        // SEの制御（単体の爆発生成では1回だけ鳴らす）
         if (this.game.sc.audio && !soundoff) {
             this.game.sc.audio.playExplosion();
         }

@@ -1,13 +1,39 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/commonEnemies.js - 全ステージ共通・汎用敵クラス群
+ * entities/enemies/commonEnemies.ts - 全ステージ共通・汎用敵クラス群
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { Enemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+
+import {
+    Enemy,
+    EnemyBullet,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData
+} from '../enemy.js';
+
+export interface CommonEnemyGameContext extends EnemyGameContext {
+    player?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        alive?: boolean;
+        windForceX?: number;
+    } | null;
+}
+
+export interface WindParticle {
+    x: number;
+    y: number;
+    length: number;
+    speed: number;
+}
 
 // ==========================================
 // 1. 定番・基本行動タイプ
@@ -17,11 +43,11 @@ import { Enemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  * StraightEnemy: 直進型。毎フレーム等速直線運動を行う最も基本的な敵
  */
 export class StraightEnemy extends Enemy {
-    speed = 2.5;
+    public override speed: number = 2.5;
 
-    get imageName() { return "enemy_straight.webp"; }
+    public override get imageName(): string { return "enemy_straight.webp"; }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         // 直進移動
@@ -31,24 +57,28 @@ export class StraightEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): StraightEnemy {
         return new StraightEnemy(game, bType, hp);
     }
 }
-
 
 /**
  * SineEnemy: サイン波移動型。横揺れしながら降下する
  */
 export class SineEnemy extends Enemy {
-    phase = 0;
-    amplitude = 50;
-    frequency = 0.05;
-    speedY = 2.0;
+    public phase: number = 0;
+    public amplitude: number = 50;
+    public frequency: number = 0.05;
+    public speedY: number = 2.0;
 
-    get imageName() { return "enemy_sine.webp"; }
+    public override get imageName(): string { return "enemy_sine.webp"; }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         // サイン波移動 (setStartPosition で記憶した startX を基準に揺らす)
@@ -59,27 +89,31 @@ export class SineEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): SineEnemy {
         const enemy = new SineEnemy(game, bType, hp);
-        if (data.phase !== undefined) enemy.phase = data.phase;
-        if (data.amplitude !== undefined) enemy.amplitude = data.amplitude;
-        if (data.frequency !== undefined) enemy.frequency = data.frequency;
+        if (typeof data.phase === 'number') enemy.phase = data.phase;
+        if (typeof data.amplitude === 'number') enemy.amplitude = data.amplitude;
+        if (typeof data.frequency === 'number') enemy.frequency = data.frequency;
         return enemy;
     }
 }
-
 
 /**
  * ScoutEnemy: 画面外からUの字を描いて索敵し、弾を撒いて上部へ去っていく偵察型
  */
 export class ScoutEnemy extends Enemy {
-    timer = 0;
-    isLeft = true;
-    hasShot = false;
+    public override timer: number = 0;
+    public isLeft: boolean = true;
+    public hasShot: boolean = false;
 
-    get imageName() { return "enemy_scout.webp"; }
+    public override get imageName(): string { return "enemy_scout.webp"; }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         this.timer += 0.04;
@@ -88,16 +122,21 @@ export class ScoutEnemy extends Enemy {
 
         // U字最下点付近で1回だけ射撃
         if (Math.abs(this.timer - Math.PI / 2) < 0.05 && !this.hasShot) {
-            this.shoot(game); 
+            this.shoot(game);
             this.hasShot = true;
         }
 
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): ScoutEnemy {
         const enemy = new ScoutEnemy(game, bType, hp);
-        
+
         // from の指定から侵入方向を判定 ("right" 以外は isLeft = true)
         enemy.isLeft = String(data.from || 'left').toLowerCase() !== 'right';
 
@@ -105,24 +144,23 @@ export class ScoutEnemy extends Enemy {
     }
 }
 
-
 /**
  * StationaryEnemy: 画面内の指定位置まで降りて静止し、弾を撒いて去っていく設置型
  */
 export class StationaryEnemy extends Enemy {
-    stopY = 100;
-    waitTime = 120;
-    stateTimer = 0;
-    state = 'MOVE_IN';
+    public stopY: number = 100;
+    public waitTime: number = 120;
+    public stateTimer: number = 0;
+    public state: 'MOVE_IN' | 'STOP' | 'MOVE_OUT' = 'MOVE_IN';
 
-    get imageName() { return "enemy_stationary.webp"; }
+    public override get imageName(): string { return "enemy_stationary.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 1) {
+    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
         this.baseShootInterval = 30;
     }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -138,7 +176,7 @@ export class StationaryEnemy extends Enemy {
                 // 記憶された startX をベースに細かく横揺れ
                 this.x = this.startX + Math.sin(this.stateTimer * 0.2) * 2;
 
-                // 🎯 親クラスの自動射撃カウンター＆発射処理に一任！
+                // 親クラスの自動射撃カウンター＆発射処理に一任
                 super.update(game);
 
                 if (this.stateTimer >= this.waitTime) {
@@ -152,72 +190,80 @@ export class StationaryEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): StationaryEnemy {
         const enemy = new StationaryEnemy(game, bType, hp);
-        if (data.stopY !== undefined) enemy.stopY = data.stopY;
-        if (data.waitTime !== undefined) enemy.waitTime = data.waitTime;
+        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
+        if (typeof data.waitTime === 'number') enemy.waitTime = data.waitTime;
         return enemy;
     }
 }
-
 
 /**
  * AssaultEnemy: 直進後、自機の高度に合わせて急激に軌道修正して体当たりを狙う突撃型
  */
 export class AssaultEnemy extends Enemy {
-    static CHARGE_SPEED = 6.5;
+    public static readonly CHARGE_SPEED = 6.5;
 
-    state = 'FALL';
-    vx = 0;
-    vy = 3.0;
+    public state: 'FALL' | 'CHARGE' = 'FALL';
+    public vx: number = 0;
+    public vy: number = 3.0;
 
-    get imageName() { return "enemy_assault.webp"; }
+    public override get imageName(): string { return "enemy_assault.webp"; }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         this.x += this.vx;
         this.y += this.vy;
 
-        if (this.state === 'FALL' && game.player.alive) {
+        if (this.state === 'FALL' && game.player?.alive) {
             if (this.y >= game.player.y - 150) {
                 this.state = 'CHARGE';
                 const dx = game.player.x - this.x;
                 const dy = game.player.y - this.y;
                 const dist = Math.hypot(dx, dy) || 1;
-                
-                this.vx = (dx / dist) * AssaultEnemy.CHARGE_SPEED; 
+
+                this.vx = (dx / dist) * AssaultEnemy.CHARGE_SPEED;
                 this.vy = (dy / dist) * AssaultEnemy.CHARGE_SPEED;
             }
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): AssaultEnemy {
         return new AssaultEnemy(game, bType, hp);
     }
 }
-
 
 /**
  * HunterEnemy: 執拗に自機のX座標を追従しながら降下してくるハンター型
  */
 export class HunterEnemy extends Enemy {
-    speedY = 1.0;
-    speedX = 1.5;
+    public speedY: number = 1.0;
+    public speedX: number = 1.5;
 
-    get imageName() { return "enemy_hunter.webp"; }
+    public override get imageName(): string { return "enemy_hunter.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 2) {
-        super(game, bulletType, hp); 
+    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 2) {
+        super(game, bulletType, hp);
         this.baseShootInterval = 80;
     }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
 
-        if (game.player.alive) {
+        if (game.player?.alive) {
             const targetX = game.player.x;
             if (this.x < targetX) {
                 this.x = Math.min(this.x + this.speedX, targetX);
@@ -230,30 +276,34 @@ export class HunterEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): HunterEnemy {
         return new HunterEnemy(game, bType, hp);
     }
 }
-
 
 /**
  * ShieldEnemy: 高耐久の盾。正面から弾を受けると「撃ち返し（カウンター）」を発生させる
  */
 export class ShieldEnemy extends Enemy {
-    speedY = 0.6;
+    public speedY: number = 0.6;
 
-    get imageName() { return "enemy_shield.webp"; }
+    public override get imageName(): string { return "enemy_shield.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 5) {
+    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'aim', hp: number = 5) {
         super(game, bulletType, hp);
     }
 
-    update(game) {
+    public override update(_game: CommonEnemyGameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
     }
 
-    takeDamage(game, amount) {
+    public override takeDamage(game: CommonEnemyGameContext, amount: number): boolean {
         const isDead = super.takeDamage(game, amount);
         if (!isDead && game) {
             game.entities.push(
@@ -263,23 +313,29 @@ export class ShieldEnemy extends Enemy {
         return isDead;
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): ShieldEnemy {
         return new ShieldEnemy(game, bType, hp);
     }
 }
-
 
 /**
  * GaleArtilleryEnemy: 画面上部に陣取り、強風を発生させる固定砲台
  */
 export class GaleArtilleryEnemy extends Enemy {
-    stopY = 40;
-    timer = 0;
-    state = 'MOVE_IN';
+    public stopY: number = 40;
+    public override timer: number = 0;
+    public state: 'MOVE_IN' | 'BLOW_GALE' | 'RETREAT' = 'MOVE_IN';
+    public windDirection: 1 | -1;
+    public windParticles: WindParticle[];
 
-    get imageName() { return "enemy_gale_artillery.webp"; }
+    public override get imageName(): string { return "enemy_gale_artillery.webp"; }
 
-    constructor(game, bulletType = 'triple', hp = 4) {
+    constructor(game: CommonEnemyGameContext, bulletType: BulletType = 'triple', hp: number = 4) {
         super(game, bulletType, hp);
         this.width = 160;
         this.height = (155 / 291) * 160;
@@ -294,7 +350,7 @@ export class GaleArtilleryEnemy extends Enemy {
         }));
     }
 
-    update(game) {
+    public override update(game: CommonEnemyGameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -309,11 +365,11 @@ export class GaleArtilleryEnemy extends Enemy {
                 this.timer++;
 
                 if (game.player && game.player.alive) {
-                    const windPower = (Math.sin(this.timer * 0.08) * 0.8 + 1.2); 
+                    const windPower = (Math.sin(this.timer * 0.08) * 0.8 + 1.2);
                     game.player.windForceX = this.windDirection * windPower;
                 }
 
-                // 🎯 親クラスの自動射撃カウンター＆発射処理を実行
+                // 親クラスの自動射撃カウンター＆発射処理を実行
                 super.update(game);
 
                 if (this.timer >= 150) {
@@ -327,7 +383,7 @@ export class GaleArtilleryEnemy extends Enemy {
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         super.draw(ctx, isDebug);
 
         if (this.state === 'BLOW_GALE') {
@@ -350,11 +406,16 @@ export class GaleArtilleryEnemy extends Enemy {
             }
             ctx.restore();
         }
-    }   
+    }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: CommonEnemyGameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): GaleArtilleryEnemy {
         const enemy = new GaleArtilleryEnemy(game, bType, hp);
-        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
         return enemy;
     }
 }

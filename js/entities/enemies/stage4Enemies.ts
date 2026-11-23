@@ -1,15 +1,35 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/stage4Enemies.js - STAGE-4 (Ancient Logic) 固有敵クラス群 & ボス
+ * entities/enemies/stage4Enemies.ts - STAGE-4 (Ancient Logic) 固有敵クラス群 & ボス
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
 
-import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
+import {
+    Enemy,
+    BossEnemy,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData
+} from '../enemy.js';
+
+export type Stage4GameContext = EnemyGameContext;
+
+export interface WormHistoryPoint {
+    x: number;
+    y: number;
+    angle: number;
+    isSubmerged: boolean;
+}
+
+export interface PatrolPoint {
+    x: number;
+    y: number;
+}
 
 // ==========================================
 // 1. STAGE-4 固有のザコ・中型敵クラス群
@@ -19,19 +39,16 @@ import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
  * 1. DustScout: 画面下部（砂塵の中から）逆噴射で「下から上へ」上昇してくる逆スクロール偵察機
  */
 export class DustScoutEnemy extends Enemy {
-    get imageName() { return "enemy_dust_scout.webp"; }
+    public speedY: number = -2.5;
+    public hasShot: boolean = false;
 
-    constructor(game, bulletType = 'aim', hp = 1) {
+    public override get imageName(): string { return "enemy_dust_scout.webp"; }
+
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'aim', hp: number = 1) {
         super(game, bulletType, hp);
-        this.speedY = -2.5;
-        this.hasShot = false;
     }
 
-    setStartPosition(x, y) {
-        super.setStartPosition(x, y);
-    }    
-
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -46,7 +63,12 @@ export class DustScoutEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): DustScoutEnemy {
         return new DustScoutEnemy(game, bType, hp);
     }
 }
@@ -55,21 +77,21 @@ export class DustScoutEnemy extends Enemy {
  * 2. RelicPrism: 八角形の古代パーツ。一定位置で静止・回転しながら幾何学的な格子状クロス弾幕を生成
  */
 export class RelicPrismEnemy extends Enemy {
-    stopY = 120;
-    timer = 0;
-    rotationAngle = 0;
-    state = 'MOVE_IN';
+    public stopY: number = 120;
+    public timer: number = 0;
+    public rotationAngle: number = 0;
+    public state: 'MOVE_IN' | 'ROTATE_FIRE' | 'RETREAT' = 'MOVE_IN';
+    public baseShootInterval: number = 50;
 
-    get imageName() { return "enemy_relic_prism.webp"; }
+    public override get imageName(): string { return "enemy_relic_prism.webp"; }
 
-    constructor(game, bulletType = 'cross', hp = 3) {
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'cross', hp: number = 3) {
         super(game, bulletType, hp);
         this.width = 80;
         this.height = 80;
-        this.baseShootInterval = 50;
     }
 
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -85,7 +107,7 @@ export class RelicPrismEnemy extends Enemy {
                 // 角度を更新（親クラスの shoot() がこの rotationAngle を参照してクロス弾を発射）
                 this.rotationAngle += 0.05;
 
-                // 🎯 自動射撃＆画面内判定を親クラスに一任
+                // 自動射撃＆画面内判定を親クラスに一任
                 super.update(game);
 
                 if (this.timer >= 250) {
@@ -99,9 +121,14 @@ export class RelicPrismEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): RelicPrismEnemy {
         const enemy = new RelicPrismEnemy(game, bType, hp);
-        if (data.stopY !== undefined) enemy.stopY = data.stopY;
+        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
         return enemy;
     }
 }
@@ -110,18 +137,18 @@ export class RelicPrismEnemy extends Enemy {
  * 3. MirageCrawler: 砂漠の蜃気楼（ラスタスクロール波形）のようにX軸がブレながらゆっくり降下する機体
  */
 export class MirageCrawlerEnemy extends Enemy {
-    speedY = 1.0;
-    timer = 0;
+    public speedY: number = 1.0;
+    public timer: number = 0;
+    public baseShootInterval: number = 80;
 
-    get imageName() { return "enemy_mirage_crawler.webp"; }
+    public override get imageName(): string { return "enemy_mirage_crawler.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 2) {
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'aim', hp: number = 2) {
         super(game, bulletType, hp);
-        this.baseShootInterval = 80;
         this.timer = game.random.range(0, 100);
     }
 
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
         this.timer += 0.1;
 
@@ -131,7 +158,12 @@ export class MirageCrawlerEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): MirageCrawlerEnemy {
         return new MirageCrawlerEnemy(game, bType, hp);
     }
 }
@@ -140,18 +172,18 @@ export class MirageCrawlerEnemy extends Enemy {
  * 4. SandPillar: 縦長柱状の防壁構造。前面からの通常弾を大幅軽減/跳ね返す無効化ガードを持つ
  */
 export class SandPillarEnemy extends Enemy {
-    speedY = 0.5;
-    hitFlashTimer = 0;
+    public speedY: number = 0.5;
+    public hitFlashTimer: number = 0;
 
-    get imageName() { return "enemy_sand_pillar.webp"; }
+    public override get imageName(): string { return "enemy_sand_pillar.webp"; }
 
-    constructor(game, bulletType = 'none', hp = 5) {
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'none', hp: number = 5) {
         super(game, bulletType, hp);
         this.width = 64;
         this.height = (467 / 394) * 64;
     }
 
-    update(game) {
+    public override update(_game: Stage4GameContext): void {
         if (!this.active) return;
 
         this.y += this.speedY;
@@ -161,13 +193,13 @@ export class SandPillarEnemy extends Enemy {
         }
     }
 
-    takeDamage(game, amount) {
+    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
         const reducedAmount = Math.max(1, Math.floor(amount * 0.5));
         this.hitFlashTimer = 5;
         return super.takeDamage(game, reducedAmount);
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.hitFlashTimer > 0) {
             ctx.filter = 'brightness(3.0) contrast(1.5)';
@@ -176,7 +208,12 @@ export class SandPillarEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): SandPillarEnemy {
         return new SandPillarEnemy(game, bType, hp);
     }
 }
@@ -185,18 +222,18 @@ export class SandPillarEnemy extends Enemy {
  * 5. GigaOrb: エネルギーチャージ（フラッシュ前兆）を行い、直線状に太い弾幕を一気に射出する高耐久コア
  */
 export class GigaOrbEnemy extends Enemy {
-    state = 'CHARGE';
-    timer = 0;
+    public state: 'CHARGE' | 'FIRE' | 'RETREAT' = 'CHARGE';
+    public timer: number = 0;
 
-    get imageName() { return "enemy_giga_orb.webp"; }
+    public override get imageName(): string { return "enemy_giga_orb.webp"; }
 
-    constructor(game, bulletType = 'twin', hp = 10) {
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'twin', hp: number = 10) {
         super(game, bulletType, hp);
         this.width = (510 / 440) * 48;
         this.height = 48;
     }
 
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
 
         switch (this.state) {
@@ -213,7 +250,7 @@ export class GigaOrbEnemy extends Enemy {
             case 'FIRE':
                 this.timer++;
 
-                // 🎯 親クラスの bulletType='twin' 射撃を呼び出し
+                // 親クラスの bulletType='twin' 射撃を呼び出し
                 if (this.timer % 5 === 0) {
                     this.shoot(game);
                 }
@@ -229,7 +266,7 @@ export class GigaOrbEnemy extends Enemy {
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.state === 'CHARGE') {
             const glow = Math.sin(this.timer * 0.3) * 0.5 + 0.5;
@@ -239,7 +276,12 @@ export class GigaOrbEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): GigaOrbEnemy {
         return new GigaOrbEnemy(game, bType, hp);
     }
 }
@@ -248,26 +290,31 @@ export class GigaOrbEnemy extends Enemy {
  * 6. RockEnemy: 超高速で垂直落下してくるデブリ・岩石型トラップ
  */
 export class RockEnemy extends Enemy {
-    static DEFAULT_SPEED_Y = 6.0;
+    public static readonly DEFAULT_SPEED_Y = 6.0;
 
-    speedX = -0.5;
-    speedY = RockEnemy.DEFAULT_SPEED_Y;
+    public speedX: number = -0.5;
+    public speedY: number = RockEnemy.DEFAULT_SPEED_Y;
 
-    get imageName() { return "enemy_rock.webp"; }
+    public override get imageName(): string { return "enemy_rock.webp"; }
 
-    constructor(game, bulletType = 'none', hp = 1) {
+    constructor(game: Stage4GameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
     }
 
-    update(game) {
+    public override update(_game: Stage4GameContext): void {
         if (!this.active) return;
         this.x += this.speedX;
         this.y += this.speedY;
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): RockEnemy {
         const enemy = new RockEnemy(game, bType, hp);
-        if (data.speedY !== undefined) enemy.speedY = data.speedY;
+        if (typeof data.speedY === 'number') enemy.speedY = data.speedY;
         return enemy;
     }
 }
@@ -276,9 +323,16 @@ export class RockEnemy extends Enemy {
  * 7. WormSegment: 連結エネミー（多関節）の胴体・尻尾パーツ
  */
 export class WormSegment extends Enemy {
-    static SEGMENT_SPACING = 20;
+    public static readonly SEGMENT_SPACING = 20;
 
-    constructor(game, head, index, isTail = false) {
+    public head: WormEnemy;
+    public index: number;
+    public isTail: boolean;
+    public customImageKey: string;
+    public angle: number = 0;
+    public isSubmerged: boolean = false;
+
+    constructor(game: Stage4GameContext, head: WormEnemy, index: number, isTail: boolean = false) {
         const imageKey = isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp";
         super(game, 'none', 1);
 
@@ -287,17 +341,17 @@ export class WormSegment extends Enemy {
         this.isTail = isTail;
         this.customImageKey = imageKey;
 
-        this.image = game.assets.get(imageKey);
+        this.image = game.assets?.get(imageKey);
 
         this.width = head.width || 24;
         this.height = head.height || 24;
     }
 
-    get imageName() {
+    public override get imageName(): string {
         return this.customImageKey || (this.isTail ? "stage-4/enemy_worm_tail.webp" : "stage-4/enemy_worm_body.webp");
     }
 
-    update(game) {
+    public override update(_game: Stage4GameContext): void {
         if (!this.active) return;
 
         if (this.head?.active) {
@@ -312,7 +366,7 @@ export class WormSegment extends Enemy {
                 this.isSubmerged = pos.isSubmerged;
             } else {
                 this.x = this.head.x;
-                this.y = this.head.y - (this.index * WormSegment.SEGMENT_SPACING);
+                this.y = this.head.y - this.index * WormSegment.SEGMENT_SPACING;
                 this.angle = this.head.angle || 0;
             }
         } else {
@@ -320,7 +374,7 @@ export class WormSegment extends Enemy {
         }
     }
 
-    takeDamage(game, amount) {
+    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
         if (this.isSubmerged) return false;
         const isDead = super.takeDamage(game, amount);
         if (isDead && this.head) {
@@ -329,7 +383,7 @@ export class WormSegment extends Enemy {
         return isDead;
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         if (!this.active) return;
 
         ctx.save();
@@ -354,11 +408,26 @@ export class WormSegment extends Enemy {
  * 8. WormEnemy: 連結エネミー（頭部）
  */
 export class WormEnemy extends Enemy {
-    static DEFAULT_LENGTH = 6;
+    public static readonly DEFAULT_LENGTH = 6;
 
-    get imageName() { return "stage-4/enemy_worm_head.webp"; }
+    public speedY: number = 1.8;
+    public moveDirectionY: number = 1;
+    public timer: number = 0;
+    public angle: number = 0;
+    public isSubmerged: boolean = false;
+    public history: WormHistoryPoint[] = [];
+    public maxHistory: number;
+    public segments: WormSegment[] = [];
+    public baseX: number = 0;
 
-    constructor(game, bulletType = 'aim', hp = 5, length = WormEnemy.DEFAULT_LENGTH) {
+    public override get imageName(): string { return "stage-4/enemy_worm_head.webp"; }
+
+    constructor(
+        game: Stage4GameContext,
+        bulletType: BulletType = 'aim',
+        hp: number = 5,
+        length: number = WormEnemy.DEFAULT_LENGTH
+    ) {
         super(game, bulletType, hp);
 
         if (game?.assets) {
@@ -366,20 +435,12 @@ export class WormEnemy extends Enemy {
             game.assets.get("stage-4/enemy_worm_tail.webp");
         }
 
-        this.speedY = 1.8;
-        this.moveDirectionY = 1;
         this.timer = game.random.range(0, 100);
-
-        this.angle = 0;
-        this.isSubmerged = false;
-
-        this.history = [];
         this.maxHistory = length * 10;
 
-        this.segments = [];
         if (game?.entities) {
             for (let i = 1; i < length; i++) {
-                const isTail = (i === length - 1);
+                const isTail = i === length - 1;
                 const seg = new WormSegment(game, this, i, isTail);
                 this.segments.push(seg);
                 game.entities.push(seg);
@@ -387,17 +448,17 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.baseX = x;
     }
 
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
         this.timer += 0.04;
 
-        const upperThreshold =  game.height * 0.25;
-        const lowerThreshold =  game.height * 0.66;
+        const upperThreshold = game.height * 0.25;
+        const lowerThreshold = game.height * 0.66;
 
         if (this.y >= lowerThreshold && this.moveDirectionY > 0) {
             this.moveDirectionY = -1;
@@ -438,12 +499,12 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    takeDamage(game, amount) {
+    public override takeDamage(game: Stage4GameContext, amount: number): boolean {
         if (this.isSubmerged) return false;
         return super.takeDamage(game, amount);
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.isSubmerged) {
             ctx.globalAlpha = 0.3;
@@ -461,7 +522,7 @@ export class WormEnemy extends Enemy {
         ctx.restore();
     }
 
-    removeSegment(seg) {
+    public removeSegment(seg: WormSegment): void {
         const idx = this.segments.indexOf(seg);
         if (idx !== -1) {
             this.segments.splice(idx, 1);
@@ -471,8 +532,14 @@ export class WormEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
-        return new WormEnemy(game, bType, hp || 5, data.length ?? WormEnemy.DEFAULT_LENGTH);
+    public static override create(
+        game: Stage4GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): WormEnemy {
+        const len = typeof data.length === 'number' ? data.length : WormEnemy.DEFAULT_LENGTH;
+        return new WormEnemy(game, bType, hp || 5, len);
     }
 }
 
@@ -484,15 +551,21 @@ export class WormEnemy extends Enemy {
  * STAGE-4 ボス: 地上絵守護神（Ancient Golem / BossEnemy_04）
  */
 export class BossEnemy_04 extends BossEnemy {
-    state = 'APPEAR';
-    timer = 0;
-    targetPointIndex = 0;
+    public state: 'APPEAR' | 'PATROL_PATTERN' = 'APPEAR';
+    public timer: number = 0;
+    public targetPointIndex: number = 0;
+    public points?: PatrolPoint[];
 
-    get imageName() { return "enemy_boss_04.webp"; }
+    public override get imageName(): string { return "enemy_boss_04.webp"; }
 
-    constructor(game, hp = 800, timeLimit, timeMultiplier) {
+    constructor(
+        game: Stage4GameContext,
+        hp: number = 800,
+        timeLimit?: number,
+        timeMultiplier?: number
+    ) {
         super(game, hp, timeLimit, timeMultiplier);
-        
+
         this.isBoss = true;
         this.width = 128;
         this.height = 128;
@@ -500,7 +573,7 @@ export class BossEnemy_04 extends BossEnemy {
         this.hitHeight = 100;
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.points = [
             { x: this.startX - 80, y: 50 },
@@ -509,7 +582,7 @@ export class BossEnemy_04 extends BossEnemy {
         ];
     }
 
-    update(game) {
+    public override update(game: Stage4GameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -522,7 +595,7 @@ export class BossEnemy_04 extends BossEnemy {
                 }
                 break;
 
-            case 'PATROL_PATTERN':
+            case 'PATROL_PATTERN': {
                 if (!this.points) {
                     this.points = [
                         { x: this.startX - 80, y: 50 },
@@ -550,15 +623,21 @@ export class BossEnemy_04 extends BossEnemy {
                     this.shoot(game);
                 }
                 break;
+            }
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage4GameContext,
+        _bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): BossEnemy_04 {
         return new BossEnemy_04(
-            game, 
-            hp || 800, 
-            data.timeLimit, 
-            data.timeMultiplier
+            game,
+            hp || 800,
+            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
+            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
         );
     }
 }

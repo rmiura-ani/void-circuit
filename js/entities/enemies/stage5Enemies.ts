@@ -1,15 +1,52 @@
 /*
  * PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/stage5Enemies.js - STAGE-5 (Planetary Pulse) 固有敵クラス群 & ボス
+ * entities/enemies/stage5Enemies.ts - STAGE-5 (Planetary Pulse) 固有敵クラス群 & ボス
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-"use strict";
 
-import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
+import {
+    Enemy,
+    BossEnemy,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData,
+    type BossHitboxPart
+} from '../enemy.js';
+
+export interface Stage5PlayerLike {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    alive?: boolean;
+    suctionForceX?: number;
+    suctionForceY?: number;
+}
+
+export interface Stage5GameContext extends EnemyGameContext {
+    player?: Stage5PlayerLike | null;
+}
+
+interface SuctionParticle {
+    angle: number;
+    maxDistance: number;
+    distance: number;
+    baseSpeed: number;
+    length: number;
+    alpha: number;
+}
+
+interface HealPulse {
+    radius: number;
+    maxRadius: number;
+    speed: number;
+    alpha: number;
+}
 
 // ==========================================
 // 1. STAGE-5 固有のザコ・中型敵クラス群
@@ -19,22 +56,18 @@ import { Enemy, BossEnemy, ENEMY_REGISTRY } from '../enemy.js';
  * 分裂時に飛び散る小型細胞クラス（CellMitosisEnemy等から自動生成される）
  */
 export class CellMiniEnemy extends Enemy {
-    vx = 0;
-    vy = 2;
+    public vx: number = 0;
+    public vy: number = 2;
 
-    get imageName() { return "enemy_cell_mini.webp"; }
+    public override get imageName(): string { return "enemy_cell_mini.webp"; }
 
-    constructor(game, bulletType = 'none', hp = 1) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
-        this.width = 20;  // 小型化
+        this.width = 20;
         this.height = 20;
     }
 
-    setStartPosition(x, y) {
-        super.setStartPosition(x, y);
-    }
-
-    update(game) {
+    public override update(_game: Stage5GameContext): void {
         if (!this.active) return;
         this.x += this.vx;
         this.y += this.vy;
@@ -43,10 +76,15 @@ export class CellMiniEnemy extends Enemy {
         this.vy = Math.min(2.5, this.vy + 0.05);
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): CellMiniEnemy {
         const enemy = new CellMiniEnemy(game, bType, hp || 1);
-        if (data.vx !== undefined) enemy.vx = data.vx;
-        if (data.vy !== undefined) enemy.vy = data.vy;
+        if (typeof data.vx === 'number') enemy.vx = data.vx;
+        if (typeof data.vy === 'number') enemy.vy = data.vy;
         return enemy;
     }
 }
@@ -55,49 +93,52 @@ export class CellMiniEnemy extends Enemy {
  * 1. CellMitosis: 降下中に被弾（撃破）すると左右に2つの小型細胞（CellMini）に分裂して飛び散る増殖機
  */
 export class CellMitosisEnemy extends Enemy {
-    speedY = 1.2;
+    public speedY: number = 1.2;
 
-    get imageName() { return "enemy_cell_mitosis.webp"; }
+    public override get imageName(): string { return "enemy_cell_mitosis.webp"; }
 
-    constructor(game, bulletType = 'none', hp = 2) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 2) {
         super(game, bulletType, hp);
         this.width = (220 / 111) * 32;
         this.height = 32;
     }
 
-    update(game) {
+    public override update(_game: Stage5GameContext): void {
         if (!this.active) return;
         this.y += this.speedY;
     }
 
     /** 撃破時に2体に「細胞分裂」して左右へ弾き出す */
-    takeDamage(game, amount) {
+    public override takeDamage(game: Stage5GameContext, amount: number): boolean {
         if (!this.active) return false;
 
-        // ⭕ ダメージを受けて死亡する前の「正確な中心座標」をあらかじめ保持しておく
+        // ダメージを受けて死亡する前の正確な中心座標をあらかじめ保持
         const bx = this.x + this.width / 2;
         const by = this.y + this.height / 2;
 
-        // 親クラス（Enemy）の被弾・撃破（onDie）処理を実行
+        // 親クラスの被弾・撃破処理を実行
         const isDead = super.takeDamage(game, amount);
 
         // 撃破された場合のみ分裂体を生成
         if (isDead && game) {
-            // 保存しておいた正確な座標に CellMiniEnemy を配置
             const leftMini = CellMiniEnemy.create(game, 'none', 1, { vx: -2.0, vy: -1.0 });
             leftMini.setStartPosition(bx - 10, by);
 
             const rightMini = CellMiniEnemy.create(game, 'none', 1, { vx: 2.0, vy: -1.0 });
             rightMini.setStartPosition(bx + 10, by);
 
-            // ゲームのエンティティ配列へ追加
             game.entities.push(leftMini, rightMini);
         }
 
         return isDead;
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): CellMitosisEnemy {
         return new CellMitosisEnemy(game, bType, hp || 2);
     }
 }
@@ -106,19 +147,19 @@ export class CellMitosisEnemy extends Enemy {
  * 2. PulseSpore: BGMの脈動（パルス）と同調して「膨張・縮小」を繰り返し、最大膨張時に全方位弾を解放するビート同期機
  */
 export class PulseSporeEnemy extends Enemy {
-    speedY = 0.8;
-    timer = 0;
-    scale = 1.0;
-    hasPulsed = false;
+    public speedY: number = 0.8;
+    public timer: number = 0;
+    public scale: number = 1.0;
+    public hasPulsed: boolean = false;
 
-    get imageName() { return "enemy_pulse_spore.webp"; }
+    public override get imageName(): string { return "enemy_pulse_spore.webp"; }
 
-    constructor(game, bulletType = 'eight-way', hp = 1) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'eight-way', hp: number = 1) {
         super(game, bulletType, hp);
-        this._loadAssettimer = game.random.range(0, 60);
+        this.timer = game.random.range(0, 60);
     }
 
-    update(game) {
+    public override update(game: Stage5GameContext): void {
         if (!this.active) return;
         this.timer += 0.08;
         this.y += this.speedY;
@@ -131,11 +172,11 @@ export class PulseSporeEnemy extends Enemy {
             this.shoot(game);
             this.hasPulsed = true;
         } else if (this.scale < 1.2) {
-            this.hasPulsed = false; // 次の膨張ピークに向けてフラグリセット
+            this.hasPulsed = false;
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         // 脈動に合わせて画像の描画スケールを動的に変更
         ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
@@ -146,7 +187,12 @@ export class PulseSporeEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): PulseSporeEnemy {
         return new PulseSporeEnemy(game, bType || 'eight-way', hp || 1);
     }
 }
@@ -155,24 +201,25 @@ export class PulseSporeEnemy extends Enemy {
  * 3. BioTentacle: 画面端から滑らかなベジェ曲線運動（ウネウネ動き）で画面中央に触手を伸ばす生体機
  */
 export class BioTentacleEnemy extends Enemy {
-    speedY = 1.0;
-    timer = 0;
+    public speedY: number = 1.0;
+    public timer: number = 0;
+    public baseX?: number;
+    public baseShootInterval: number = 60;
 
-    get imageName() { return "enemy_bio_tentacle.webp"; }
+    public override get imageName(): string { return "enemy_bio_tentacle.webp"; }
 
-    constructor(game, bulletType = 'aim', hp = 4) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'aim', hp: number = 4) {
         super(game, bulletType, hp);
         this.width = (461 / 133) * 32;
         this.height = 32;
-        this.baseShootInterval = 60;
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.baseX = x;
     }
 
-    update(game) {
+    public override update(game: Stage5GameContext): void {
         if (!this.active) return;
         this.timer += 0.05;
 
@@ -184,8 +231,13 @@ export class BioTentacleEnemy extends Enemy {
         super.update(game);
     }
 
-    static create(game, bType, hp, data = {}) {
-        return new BioTentacleEnemy(game, bType , hp );
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): BioTentacleEnemy {
+        return new BioTentacleEnemy(game, bType, hp);
     }
 }
 
@@ -193,24 +245,24 @@ export class BioTentacleEnemy extends Enemy {
  * 4. LeechParasite: 自機に向かって超低速で寄生飛行。
  */
 export class LeechParasiteEnemy extends Enemy {
-    speed = 1.2;
-    isParasite = true; // 衝突判定側でデバフ処理を分岐するためのフラグ例
+    public speed: number = 1.2;
+    public isParasite: boolean = true;
 
-    get imageName() { return "enemy_leech_parasite.webp"; }
+    public override get imageName(): string { return "enemy_leech_parasite.webp"; }
 
-    constructor(game, bulletType = 'none', hp = 1) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'none', hp: number = 1) {
         super(game, bulletType, hp);
         this.width = (250 / 123) * 32;
         this.height = 32;
     }
 
-    update(game) {
+    public override update(game: Stage5GameContext): void {
         if (!this.active) return;
 
         // 常に自機の中心をジワジワ狙う誘導移動
-        if (game.player.alive) {
-            const dx = (game.player.x + game.player.width / 2) - (this.x + this.width / 2);
-            const dy = (game.player.y + game.player.height / 2) - (this.y + this.height / 2);
+        if (game.player?.alive) {
+            const dx = game.player.x + game.player.width / 2 - (this.x + this.width / 2);
+            const dy = game.player.y + game.player.height / 2 - (this.y + this.height / 2);
             const dist = Math.hypot(dx, dy) || 1;
 
             this.x += (dx / dist) * this.speed;
@@ -220,27 +272,32 @@ export class LeechParasiteEnemy extends Enemy {
         }
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): LeechParasiteEnemy {
         return new LeechParasiteEnemy(game, bType, hp || 1);
     }
 }
 
 /**
- * 5. HeartNucleus: 周囲の小型雑魚を一定周期で吸引・自己回復（HP加算）を行う中型生体コア
+ * 5. HeartNucleus: 周囲の小型雑魚や自機を一定周期で吸引・自己回復（HP加算）を行う中型生体コア
  */
 export class HeartNucleusEnemy extends Enemy {
-    speedY = 0.4;
-    timer = 0;
-    suctionParticles = [];
-    healPulses = []; // --- 追加: 回復エフェクト管理用配列 ---
+    public speedY: number = 0.4;
+    public timer: number = 0;
+    public baseShootInterval: number = 80;
+    public suctionParticles: SuctionParticle[] = [];
+    public healPulses: HealPulse[] = [];
 
-    get imageName() { return "enemy_heart_nucleus.webp"; }
+    public override get imageName(): string { return "enemy_heart_nucleus.webp"; }
 
-    constructor(game, bulletType = 'eight-way', hp = 7) {
+    constructor(game: Stage5GameContext, bulletType: BulletType = 'eight-way', hp: number = 7) {
         super(game, bulletType, hp);
         this.width = 48;
         this.height = 48;
-        this.baseShootInterval = 80;
 
         const particleCount = 20;
         for (let i = 0; i < particleCount; i++) {
@@ -250,12 +307,14 @@ export class HeartNucleusEnemy extends Enemy {
                 distance: game.random.range(120, 150),
                 baseSpeed: game.random.range(1.5, 3),
                 length: game.random.range(12, 28),
-                alpha: game.random.range(0.4, 0.9),
+                alpha: game.random.range(0.4, 0.9)
             });
         }
     }
 
-    _applySuctionToPlayer(game) {
+    private _applySuctionToPlayer(game: Stage5GameContext): void {
+        if (!game.player) return;
+
         const enemyCenterX = this.x + this.width / 2;
         const enemyCenterY = this.y + this.height / 2;
         const playerCenterX = game.player.x + game.player.width / 2;
@@ -275,7 +334,7 @@ export class HeartNucleusEnemy extends Enemy {
         }
     }
 
-    update(game) {
+    public override update(game: Stage5GameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -286,30 +345,26 @@ export class HeartNucleusEnemy extends Enemy {
         if (this.timer % 120 === 0 && this.hp < this.maxHp) {
             this.hp = Math.min(this.maxHp, this.hp + 1);
 
-            // --- 追加: 回復パルスの生成 ---
             this.healPulses.push({
-                radius: 10,       // 開始半径
-                maxRadius: 60,    // 到達半径
-                speed: 2.5,       // 拡大スピード
-                alpha: 1.0        // 初期不透明度
+                radius: 10,
+                maxRadius: 60,
+                speed: 2.5,
+                alpha: 1.0
             });
         }
 
-        // --- 追加: 回復パルスの更新処理 ---
+        // 回復パルスの更新処理
         for (let i = this.healPulses.length - 1; i >= 0; i--) {
             const pulse = this.healPulses[i];
             pulse.radius += pulse.speed;
-            
-            // 外側に広がるにつれて透明になる
-            pulse.alpha = 1 - (pulse.radius / pulse.maxRadius);
+            pulse.alpha = 1 - pulse.radius / pulse.maxRadius;
 
-            // 寿命を迎えたら配列から削除
             if (pulse.radius >= pulse.maxRadius) {
                 this.healPulses.splice(i, 1);
             }
         }
 
-        // --- パーティクルの更新処理（イージング） ---
+        // パーティクルの更新処理（イージング）
         for (const p of this.suctionParticles) {
             const progress = 1 - Math.max(0, p.distance / p.maxDistance);
             const currentSpeed = p.baseSpeed + Math.pow(progress, 2) * 5;
@@ -329,7 +384,7 @@ export class HeartNucleusEnemy extends Enemy {
         super.update(game);
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         super.draw(ctx, isDebug);
 
         ctx.save();
@@ -338,9 +393,9 @@ export class HeartNucleusEnemy extends Enemy {
 
         ctx.globalCompositeOperation = 'lighter';
 
-        // --- 追加: 回復パルス（波紋）の描画 ---
+        // 回復パルス（波紋）の描画
         for (const pulse of this.healPulses) {
-            ctx.strokeStyle = `rgba(120, 255, 180, ${Math.max(0, pulse.alpha)})`; // エメラルドグリーンの光
+            ctx.strokeStyle = `rgba(120, 255, 180, ${Math.max(0, pulse.alpha)})`;
             ctx.lineWidth = 3;
 
             ctx.beginPath();
@@ -348,7 +403,7 @@ export class HeartNucleusEnemy extends Enemy {
             ctx.stroke();
         }
 
-        // --- 吸引パーティクルの描画 ---
+        // 吸引パーティクルの描画
         for (const p of this.suctionParticles) {
             const startX = centerX + Math.cos(p.angle) * p.distance;
             const startY = centerY + Math.sin(p.angle) * p.distance;
@@ -373,10 +428,15 @@ export class HeartNucleusEnemy extends Enemy {
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        bType?: BulletType,
+        hp?: number,
+        _data: EnemySpawnData = {}
+    ): HeartNucleusEnemy {
         return new HeartNucleusEnemy(game, bType || 'eight-way', hp || 7);
     }
-}       
+}
 
 // ==========================================
 // 2. STAGE-5 ボス実体
@@ -386,16 +446,22 @@ export class HeartNucleusEnemy extends Enemy {
  * STAGE-5 ボス: 生体DNAコア（Planetary Pulse / BossEnemy_05）
  */
 export class BossEnemy_05 extends BossEnemy {
-    state = 'APPEAR';
-    timer = 0;
-    hasSplit = false;
-    shotCount = 0;
+    public state: 'APPEAR' | 'PULSE_WAVE' = 'APPEAR';
+    public timer: number = 0;
+    public hasSplit: boolean = false;
+    public shotCount: number = 0;
+    public baseX?: number;
 
-    get imageName() { return "enemy_boss_05.webp"; }
+    public override get imageName(): string { return "enemy_boss_05.webp"; }
 
-    constructor(game, hp = 900, timeLimit, timeMultiplier) {
+    constructor(
+        game: Stage5GameContext,
+        hp: number = 900,
+        timeLimit?: number,
+        timeMultiplier?: number
+    ) {
         super(game, hp, timeLimit, timeMultiplier);
-        
+
         this.isBoss = true;
         this.width = (818 / 291) * 110;
         this.height = 110;
@@ -403,12 +469,12 @@ export class BossEnemy_05 extends BossEnemy {
         this.hitHeight = 90;
     }
 
-    setStartPosition(x, y) {
+    public override setStartPosition(x: number, y: number): void {
         super.setStartPosition(x, y);
         this.baseX = this.startX;
-    }    
+    }
 
-    getHitboxes() {
+    public override getHitboxes(): BossHitboxPart[] {
         const headW = 70;
         const headH = 120;
         const headX = this.x + (this.width - headW) / 2;
@@ -439,7 +505,7 @@ export class BossEnemy_05 extends BossEnemy {
         ];
     }
 
-    update(game) {
+    public override update(game: Stage5GameContext): void {
         if (!this.active) return;
         this.timer++;
 
@@ -453,7 +519,7 @@ export class BossEnemy_05 extends BossEnemy {
                 }
                 break;
 
-            case 'PULSE_WAVE':
+            case 'PULSE_WAVE': {
                 const bx = this.baseX ?? this.startX;
                 this.x = bx + Math.sin(this.timer * 0.02) * 60;
                 this.y = 60 + (1 - Math.cos(this.timer * 0.04)) * 20;
@@ -477,32 +543,38 @@ export class BossEnemy_05 extends BossEnemy {
                     this.shoot(game);
                 }
                 break;
+            }
         }
     }
 
-    draw(ctx, isDebug = false) {
+    public override draw(ctx: CanvasRenderingContext2D, isDebug: boolean = false): void {
         ctx.save();
         if (this.hasSplit) {
             const scale = 1.0 + Math.sin(this.timer * 0.2) * 0.08;
             const cx = this.x + this.width / 2;
             const cy = this.y + this.height / 2;
-            
+
             ctx.translate(cx, cy);
             ctx.scale(scale, scale);
             ctx.translate(-cx, -cy);
-            
+
             ctx.filter = 'hue-rotate(280deg) saturate(2.5) brightness(1.1)';
         }
         super.draw(ctx, isDebug);
         ctx.restore();
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage5GameContext,
+        _bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): BossEnemy_05 {
         return new BossEnemy_05(
-            game, 
-            hp || 900, 
-            data.timeLimit, 
-            data.timeMultiplier
+            game,
+            hp || 900,
+            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
+            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
         );
     }
 }

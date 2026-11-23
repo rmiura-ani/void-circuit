@@ -1,13 +1,39 @@
 /*
  * PROJECT: VOID-CIRCUIT
  * 
- * entities/enemies/stage1Enemies.js - STAGE-1 (Iron Vein) 固有敵クラス群 & ボス
+ * entities/enemies/stage1Enemies.ts - STAGE-1 (Iron Vein) 固有敵クラス群 & ボス
  * 
  * Copyright (c) 2026 あに。部長 / Ryo Miura
  * Licensed under the MIT License (see LICENSE file)
  * Note: Included assets are the property of their respective owners.
  */
-import { BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
+
+import {
+    BossEnemy,
+    EnemyBullet,
+    ENEMY_REGISTRY,
+    type BulletType,
+    type EnemyGameContext,
+    type EnemySpawnData
+} from '../enemy.js';
+
+export interface BossTargetLike {
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    alive?: boolean;
+}
+
+export interface Stage1GameContext extends EnemyGameContext {
+    player?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        alive?: boolean;
+    } | null;
+}
 
 // ==========================================
 // 1. STAGE-1 ボス実体
@@ -17,23 +43,22 @@ import { BossEnemy, EnemyBullet, ENEMY_REGISTRY } from '../enemy.js';
  */
 export class BossEnemy_01 extends BossEnemy {
     // 移動・演出パラメータ
-    stopY = 90;
-    entranceSpeed = 1.5;
-    swingWidth = 60;   // 左右の揺れ幅
-    swingSpeed = 0.02; // 左右の揺れ速度
+    public stopY: number = 90;
+    public entranceSpeed: number = 1.5;
+    public swingWidth: number = 60;   // 左右の揺れ幅
+    public swingSpeed: number = 0.02; // 左右の揺れ速度
 
-    state = 'ENTRANCE'; // ENTRANCE, BATTLE
-    frame = 0;
+    public state: 'ENTRANCE' | 'BATTLE' = 'ENTRANCE';
+    public override frame: number = 0;
 
-    get imageName() { return "enemy_boss_01.webp"; }
+    public override get imageName(): string { return "enemy_boss_01.webp"; }
 
-    /**
-     * @param {Object} game - ゲームインスタンス
-     * @param {number} hp - 耐久力
-     * @param {number} timeLimit - 制限時間
-     * @param {number} timeMultiplier - 時間倍率
-     */
-    constructor(game, hp = 500, timeLimit, timeMultiplier) {
+    constructor(
+        game: Stage1GameContext,
+        hp: number = 500,
+        timeLimit?: number,
+        timeMultiplier?: number
+    ) {
         super(game, hp, timeLimit, timeMultiplier);
         this.isBoss = true;
         this.width = 96;
@@ -43,19 +68,19 @@ export class BossEnemy_01 extends BossEnemy {
     }
 
     /** ボスの中心X座標 */
-    get centerX() {
+    public get centerX(): number {
         return this.x + this.width / 2;
     }
 
     /** ボスの中心Y座標 */
-    get centerY() {
+    public get centerY(): number {
         return this.y + this.height / 2;
     }
 
     /**
      * メイン更新処理
      */
-    update(game) {
+    public override update(game: Stage1GameContext): void {
         if (!this.active) return;
         this.frame++;
 
@@ -76,7 +101,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 1. 登場フェーズ更新
      */
-    updateEntrance() {
+    public updateEntrance(): void {
         if (this.y < this.stopY) {
             this.y += this.entranceSpeed;
         } else {
@@ -90,7 +115,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 2. 戦闘フェーズ更新（移動＋攻撃）
      */
-    updateBattle(game) {
+    public updateBattle(game: Stage1GameContext): void {
         // 親クラスで保持されている startX を基準に滑らかに横揺れ
         this.x = this.startX + Math.sin(this.frame * this.swingSpeed) * this.swingWidth;
 
@@ -109,7 +134,7 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 【弾幕A】 全方位リング弾を発射
      */
-    fireRingBullets(game, count = 8, speed = 3) {
+    public fireRingBullets(game: Stage1GameContext, count: number = 8, speed: number = 3): void {
         const cx = this.centerX;
         const cy = this.centerY;
         const step = (Math.PI * 2) / count;
@@ -125,13 +150,18 @@ export class BossEnemy_01 extends BossEnemy {
     /**
      * 【弾幕B】 自機を狙った左右並列2連射
      */
-    fireTargetedDualBullets(game, target, speed = 4, offsetX = 20) {
+    public fireTargetedDualBullets(
+        game: Stage1GameContext,
+        target: BossTargetLike,
+        speed: number = 4,
+        offsetX: number = 20
+    ): void {
         const cx = this.centerX;
         const cy = this.centerY;
 
         const targetCx = target.x + (target.width ? target.width / 2 : 0);
         const targetCy = target.y + (target.height ? target.height / 2 : 0);
-        
+
         const angle = Math.atan2(targetCy - cy, targetCx - cx);
         const vx = Math.cos(angle) * speed;
         const vy = Math.sin(angle) * speed;
@@ -141,12 +171,17 @@ export class BossEnemy_01 extends BossEnemy {
         game.entities.push(new EnemyBullet(cx + offsetX, cy, vx, vy));
     }
 
-    static create(game, bType, hp, data = {}) {
+    public static override create(
+        game: Stage1GameContext,
+        _bType?: BulletType,
+        hp?: number,
+        data: EnemySpawnData = {}
+    ): BossEnemy_01 {
         return new BossEnemy_01(
-            game, 
-            hp || 500, 
-            data.timeLimit, 
-            data.timeMultiplier
+            game,
+            hp || 500,
+            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
+            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
         );
     }
 }
