@@ -1,11 +1,11 @@
 /*
- * PROJECT: VOID-CIRCUIT
+- PROJECT: VOID-CIRCUIT
  *
- * soundTest.ts
- * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
- * Licensed under the MIT License (see LICENSE file)
- * Note: Included assets are the property of their respective owners.
+- soundTest.ts
+- 
+- Copyright (c) 2026 あに。部長 / Ryo Miura
+- Licensed under the MIT License (see LICENSE file)
+- Note: Included assets are the property of their respective owners.
  */
 
 import { ScenarioManager } from '../systems/scenario.js';
@@ -50,7 +50,7 @@ export interface SoundTestControllerLike {
 }
 
 /**
- * SoundTestManager: 設定画面内のサウンドテスト（BGM/SE）ロジックを専門に管理
+- SoundTestManager: 設定画面内のサウンドテスト（BGM/SE）ロジックを専門に管理
  */
 export class SoundTestManager {
     public sc: SoundTestControllerLike;
@@ -128,8 +128,8 @@ export class SoundTestManager {
 
     /** 補助メソッド：現在のステージ表記＋曲名を識別子として取得 */
     private _getCurrentBgmName(): string {
-        if (this.bgmList && this.bgmList[this.bgmTestIndex]) {
-            const current = this.bgmList[this.bgmTestIndex];
+        const current = this.bgmList[this.bgmTestIndex];
+        if (current) {
             return `${current.stagePath} [${current.fileName}]`;
         }
         return `Unknown_BGM_${this.bgmTestIndex}`;
@@ -305,8 +305,8 @@ export class SoundTestManager {
         const currentSaturation = 75 + (maxFullFactor / 25) * 25;
 
         let fxLightnessBonus = 0;
-        if (this.sc.audio.ROOM_PRESETS && this.sc.audio.ROOM_PRESETS[this.roomPresetIndex]) {
-            const p = this.sc.audio.ROOM_PRESETS[this.roomPresetIndex];
+        const p = this.sc.audio.ROOM_PRESETS?.[this.roomPresetIndex];
+        if (p) {
             fxLightnessBonus = Math.max(p.reverbWet, p.echoWet) * 12;
         }
 
@@ -318,7 +318,9 @@ export class SoundTestManager {
         ctx.save();
         for (let i = 0; i < activeCount; i++) {
             const rawIdx = targetIndices[i];
-            const rawValue = rawData[rawIdx];
+            if (rawIdx === undefined) continue;
+
+            const rawValue = rawData[rawIdx] ?? 0;
             let processedValue = (rawValue - 140 + rawIdx * 6) * 2;
             processedValue = Math.max(0, Math.min(255, processedValue));
             let barHeight = (processedValue / 255) * maxHeight;
@@ -336,15 +338,13 @@ export class SoundTestManager {
 
             if (barHeight > 0) ctx.fillRect(barX, barY, barWidth, barHeight);
 
-            if (barHeight >= this.peaks[i]) {
-                this.peaks[i] = barHeight;
-            } else {
-                this.peaks[i] = Math.max(0, this.peaks[i] - 0.45);
-            }
+            const currentPeak = this.peaks[i] ?? 0;
+            const nextPeak = barHeight >= currentPeak ? barHeight : Math.max(0, currentPeak - 0.45);
+            this.peaks[i] = nextPeak;
 
-            if (this.peaks[i] > 0) {
+            if (nextPeak > 0) {
                 ctx.fillStyle = 'rgba(255, 255, 220, 0.95)';
-                ctx.fillRect(barX, y + maxHeight - this.peaks[i], barWidth, 2);
+                ctx.fillRect(barX, y + maxHeight - nextPeak, barWidth, 2);
             }
 
             ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';

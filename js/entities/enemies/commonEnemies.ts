@@ -96,9 +96,9 @@ export class SineEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): SineEnemy {
         const enemy = new SineEnemy(game, bType, hp);
-        if (typeof data.phase === 'number') enemy.phase = data.phase;
-        if (typeof data.amplitude === 'number') enemy.amplitude = data.amplitude;
-        if (typeof data.frequency === 'number') enemy.frequency = data.frequency;
+        if (typeof data['phase'] === 'number') enemy.phase = data['phase'];
+        if (typeof data['amplitude'] === 'number') enemy.amplitude = data['amplitude'];
+        if (typeof data['frequency'] === 'number') enemy.frequency = data['frequency'];
         return enemy;
     }
 }
@@ -197,8 +197,8 @@ export class StationaryEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): StationaryEnemy {
         const enemy = new StationaryEnemy(game, bType, hp);
-        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
-        if (typeof data.waitTime === 'number') enemy.waitTime = data.waitTime;
+        if (typeof data['stopY'] === 'number') enemy.stopY = data['stopY'];
+        if (typeof data['waitTime'] === 'number') enemy.waitTime = data['waitTime'];
         return enemy;
     }
 }
@@ -415,7 +415,7 @@ export class GaleArtilleryEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): GaleArtilleryEnemy {
         const enemy = new GaleArtilleryEnemy(game, bType, hp);
-        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
+        if (typeof data['stopY'] === 'number') enemy.stopY = data['stopY'];
         return enemy;
     }
 }

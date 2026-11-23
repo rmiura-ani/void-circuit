@@ -11,9 +11,9 @@
 export interface MissionConfig {
     missionName: string;
     difficulty: string;
-    extend?: number | string;
-    lives?: number;
-    cheatUsed?: boolean;
+    extend: string;
+    lives: number;
+    cheatUsed: boolean;
 }
 
 export interface GameStats {

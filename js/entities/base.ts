@@ -24,8 +24,8 @@ export interface BoundsContext {
  */
 export interface PlayerInputState {
     isTouching?: boolean;
-    touchX?: number | null;
-    touchY?: number | null;
+    touchX?: number;
+    touchY?: number;
     isRightClick?: boolean;
     isDoubleTap?: boolean;
     isCanvasOutClick?: boolean;

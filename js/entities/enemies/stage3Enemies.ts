@@ -101,12 +101,12 @@ export class WindSlicerEnemy extends Enemy {
     ): WindSlicerEnemy {
         const enemy = new WindSlicerEnemy(game, bType, hp);
 
-        // data.from が 'right' または data.isLeft が false なら右から左へ移動
+        // data.from が 'right' または data['isLeft'] が false なら右から左へ移動
         const isLeftToRight =
             data.from === 'right'
                 ? false
-                : typeof data.isLeft === 'boolean'
-                  ? data.isLeft
+                : typeof data['isLeft'] === 'boolean'
+                  ? data['isLeft']
                   : true;
         enemy.setDirection(isLeftToRight);
 
@@ -118,9 +118,9 @@ export class WindSlicerEnemy extends Enemy {
  * 2. CloudLurker: 雲の中に隠れて半透明で出現し、射撃時のみ実体化（グラフィック明瞭化）する奇襲機
  */
 export class CloudLurkerEnemy extends Enemy {
-    public speed: number = 1.2;
+    public override speed: number = 1.2;
     public alpha: number = 0.25; // 雲の中（半透明）
-    public baseShootInterval: number = 60;
+    public override baseShootInterval: number = 60;
 
     public override get imageName(): string { return "enemy_cloud_lurker.webp"; }
 
@@ -170,7 +170,7 @@ export class CloudLurkerEnemy extends Enemy {
  */
 export class SkyFalconEnemy extends Enemy {
     public state: 'HOVER' | 'LOCKON' | 'DIVE' = 'HOVER';
-    public timer: number = 0;
+    public override timer: number = 0;
     public speedX: number = 1.8;
 
     public override get imageName(): string { return "enemy_sky_falcon.webp"; }
@@ -234,7 +234,7 @@ export class SkyFalconEnemy extends Enemy {
  */
 export class AegisCruiserEnemy extends Enemy {
     public speedY: number = 0.6;
-    public baseShootInterval: number = 90;
+    public override baseShootInterval: number = 90;
 
     public override get imageName(): string { return "enemy_aegis_cruiser.webp"; }
 
@@ -273,7 +273,7 @@ export class AegisCruiserEnemy extends Enemy {
  */
 export class BossEnemy_03 extends BossEnemy {
     public state: 'APPEAR' | 'SINE_DRIVE' | 'DRAGON_CHARGE' | 'RETREAT' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
 
     public override get imageName(): string { return "enemy_boss_03.webp"; }
 
@@ -291,7 +291,7 @@ export class BossEnemy_03 extends BossEnemy {
     }
 
     /** 部位ごとの判定領域とダメージ倍率（マルチヒットボックス） */
-    public getHitboxes(): BossHitboxPart[] {
+    public override getHitboxes(): BossHitboxPart[] {
         const headW = 40;
         const headH = 50;
         const headX = this.x + (this.width - headW) / 2;

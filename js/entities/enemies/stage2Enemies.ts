@@ -1,11 +1,11 @@
 /*
- * PROJECT: VOID-CIRCUIT
+- PROJECT: VOID-CIRCUIT
  *
- * entities/enemies/stage2Enemies.ts - STAGE-2 (Emerald Aqua) 固有敵クラス群 & ボス
- * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
- * Licensed under the MIT License (see LICENSE file)
- * Note: Included assets are the property of their respective owners.
+- entities/enemies/stage2Enemies.ts - STAGE-2 (Emerald Aqua) 固有敵クラス群 & ボス
+- 
+- Copyright (c) 2026 あに。部長 / Ryo Miura
+- Licensed under the MIT License (see LICENSE file)
+- Note: Included assets are the property of their respective owners.
  */
 
 import {
@@ -36,11 +36,11 @@ export interface Stage2GameContext extends EnemyGameContext {
 // ==========================================
 
 /**
- * 1. AquaJet: 画面上部から急降下し、滑らかなS字軌道（水流）を描いて離脱する高速機
+- 1. AquaJet: 画面上部から急降下し、滑らかなS字軌道（水流）を描いて離脱する高速機
  */
 export class AquaJetEnemy extends Enemy {
-    public speed: number = 3.8;
-    public timer: number = 0;
+    public override speed: number = 3.8;
+    public override timer: number = 0;
     public amplitude: number = 60; // S字の振り幅
     public baseX?: number;
 
@@ -83,13 +83,13 @@ export class AquaJetEnemy extends Enemy {
 }
 
 /**
- * 2. WaveSpreader: 画面中央に滞留し、水面の波紋（サイン波）のように広がる波状弾幕を放射する砲台機
+- 2. WaveSpreader: 画面中央に滞留し、水面の波紋（サイン波）のように広がる波状弾幕を放射する砲台機
  */
 export class WaveSpreaderEnemy extends Enemy {
     public stopY: number = 110;
-    public timer: number = 0;
+    public override timer: number = 0;
     public state: 'MOVE_IN' | 'SPREAD_ATTACK' | 'RETREAT' = 'MOVE_IN';
-    public baseShootInterval: number = 40;
+    public override baseShootInterval: number = 40;
 
     public override get imageName(): string { return "enemy_wave_spreader.webp"; }
 
@@ -154,17 +154,17 @@ export class WaveSpreaderEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): WaveSpreaderEnemy {
         const enemy = new WaveSpreaderEnemy(game, bType || 'triple', hp || 3);
-        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
+        if (typeof data['stopY'] === 'number') enemy.stopY = data['stopY'];
         return enemy;
     }
 }
 
 /**
- * 3. BubbleMine: ふわふわ降下する水泡トラップ。被弾・撃破時に「小さな泡（6方向拡散）」を発散する
+- 3. BubbleMine: ふわふわ降下する水泡トラップ。被弾・撃破時に「小さな泡（6方向拡散）」を発散する
  */
 export class BubbleMineEnemy extends Enemy {
     public speedY: number = 0.8; // 水中に漂うような非常にゆっくりとした降下
-    public timer: number = 0;
+    public override timer: number = 0;
     public baseX?: number;
 
     public override get imageName(): string { return "enemy_bubble_mine.webp"; }
@@ -222,18 +222,18 @@ export class BubbleMineEnemy extends Enemy {
 }
 
 /**
- * 4. VortexDiver: 自機を目掛けて斜め急降下し、画面下部で旋回（Vortex）して上昇離脱する中型機
+- 4. VortexDiver: 自機を目掛けて斜め急降下し、画面下部で旋回（Vortex）して上昇離脱する中型機
  */
 export class VortexDiverEnemy extends Enemy {
     public state: 'DIVE' | 'SWIRL' | 'ESCAPE' = 'DIVE';
     public vx: number = 0;
     public vy: number = 4.0;
-    public timer: number = 0;
+    public override timer: number = 0;
     public swirlAngle: number = 0;
     public swirlCenterX: number = 0;
     public swirlCenterY: number = 0;
     public flipScaleY: number = 1.0; // アニメーション用のスケール変数 (1.0 = 通常, -1.0 = 完全反転)
-    public baseShootInterval: number = 20;
+    public override baseShootInterval: number = 20;
 
     public override get imageName(): string { return "enemy_vortex_diver.webp"; }
 
@@ -324,12 +324,12 @@ export class VortexDiverEnemy extends Enemy {
 }
 
 /**
- * 5. CoralShield: サンゴの堅牢な外殻を持つ高耐久機。真下へ太い自機狙い連続弾を射出しながらゆっくり降下
+- 5. CoralShield: サンゴの堅牢な外殻を持つ高耐久機。真下へ太い自機狙い連続弾を射出しながらゆっくり降下
  */
 export class CoralShieldEnemy extends Enemy {
-    public speed: number = 0.5; // 超鈍重
-    public timer: number = 0;
-    public baseShootInterval: number = 60;
+    public override speed: number = 0.5; // 超鈍重
+    public override timer: number = 0;
+    public override baseShootInterval: number = 60;
 
     public override get imageName(): string { return "enemy_coral_shield.webp"; }
 
@@ -367,7 +367,7 @@ export class CoralShieldEnemy extends Enemy {
 }
 
 /**
- * MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
+- MineDebrisEnemy: 完全無敵の浮遊障害物（破壊不可）
  */
 export class MineDebrisEnemy extends Enemy {
     public static readonly DEFAULT_SPEED_Y = 1.2;
@@ -396,7 +396,7 @@ export class MineDebrisEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): MineDebrisEnemy {
         const enemy = new MineDebrisEnemy(game, 'none', Infinity);
-        if (typeof data.speedY === 'number') enemy.speedY = data.speedY;
+        if (typeof data['speedY'] === 'number') enemy.speedY = data['speedY'];
         return enemy;
     }
 }
@@ -406,12 +406,12 @@ export class MineDebrisEnemy extends Enemy {
 // ==========================================
 
 /**
- * STAGE-2 ボス: 碧琥珀の潜航母艦（BossEnemy_02）
- * 特徴: 潜航（水没・半透明化＆無敵）と浮上（全方位弾幕）を繰り返すトリッキーな水棲母艦ボス
+- STAGE-2 ボス: 碧琥珀の潜航母艦（BossEnemy_02）
+- 特徴: 潜航（水没・半透明化＆無敵）と浮上（全方位弾幕）を繰り返すトリッキーな水棲母艦ボス
  */
 export class BossEnemy_02 extends BossEnemy {
     public state: 'APPEAR' | 'ATTACK_NORMAL' | 'DIVE' | 'SURFACE' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
     public alpha: number = 1.0;
     public baseX?: number;
 
@@ -519,7 +519,7 @@ export class BossEnemy_02 extends BossEnemy {
 
         // 潜航（無敵）中はCanvas Filterで水中の青いブラー演出を動的にかける
         if (this.isInvincible) {
-            ctx.filter = 'blur(3px) brightness(0.6) saturate(0.5) hue-ftate(200deg)';
+            ctx.filter = 'blur(3px) brightness(0.6) saturate(0.5) hue-rotate(200deg)';
         }
         super.draw(ctx, isDebug);
         ctx.restore();
@@ -547,8 +547,8 @@ export class BossEnemy_02 extends BossEnemy {
         return new BossEnemy_02(
             game,
             hp || 50,
-            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
-            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
+            typeof data['timeLimit'] === 'number' ? data['timeLimit'] : undefined,
+            typeof data['timeMultiplier'] === 'number' ? data['timeMultiplier'] : undefined
         );
     }
 }

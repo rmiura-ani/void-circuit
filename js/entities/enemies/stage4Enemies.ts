@@ -78,10 +78,10 @@ export class DustScoutEnemy extends Enemy {
  */
 export class RelicPrismEnemy extends Enemy {
     public stopY: number = 120;
-    public timer: number = 0;
-    public rotationAngle: number = 0;
+    public override timer: number = 0;
+    public override rotationAngle: number = 0;
     public state: 'MOVE_IN' | 'ROTATE_FIRE' | 'RETREAT' = 'MOVE_IN';
-    public baseShootInterval: number = 50;
+    public override baseShootInterval: number = 50;
 
     public override get imageName(): string { return "enemy_relic_prism.webp"; }
 
@@ -128,7 +128,7 @@ export class RelicPrismEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): RelicPrismEnemy {
         const enemy = new RelicPrismEnemy(game, bType, hp);
-        if (typeof data.stopY === 'number') enemy.stopY = data.stopY;
+        if (typeof data['stopY'] === 'number') enemy.stopY = data['stopY'];
         return enemy;
     }
 }
@@ -138,8 +138,8 @@ export class RelicPrismEnemy extends Enemy {
  */
 export class MirageCrawlerEnemy extends Enemy {
     public speedY: number = 1.0;
-    public timer: number = 0;
-    public baseShootInterval: number = 80;
+    public override timer: number = 0;
+    public override baseShootInterval: number = 80;
 
     public override get imageName(): string { return "enemy_mirage_crawler.webp"; }
 
@@ -223,7 +223,7 @@ export class SandPillarEnemy extends Enemy {
  */
 export class GigaOrbEnemy extends Enemy {
     public state: 'CHARGE' | 'FIRE' | 'RETREAT' = 'CHARGE';
-    public timer: number = 0;
+    public override timer: number = 0;
 
     public override get imageName(): string { return "enemy_giga_orb.webp"; }
 
@@ -314,7 +314,7 @@ export class RockEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): RockEnemy {
         const enemy = new RockEnemy(game, bType, hp);
-        if (typeof data.speedY === 'number') enemy.speedY = data.speedY;
+        if (typeof data['speedY'] === 'number') enemy.speedY = data['speedY'];
         return enemy;
     }
 }
@@ -341,8 +341,6 @@ export class WormSegment extends Enemy {
         this.isTail = isTail;
         this.customImageKey = imageKey;
 
-        this.image = game.assets?.get(imageKey);
-
         this.width = head.width || 24;
         this.height = head.height || 24;
     }
@@ -360,10 +358,12 @@ export class WormSegment extends Enemy {
 
             if (history && history.length > targetIndex) {
                 const pos = history[targetIndex];
-                this.x = pos.x;
-                this.y = pos.y;
-                this.angle = pos.angle;
-                this.isSubmerged = pos.isSubmerged;
+                if (pos) {
+                    this.x = pos.x;
+                    this.y = pos.y;
+                    this.angle = pos.angle;
+                    this.isSubmerged = pos.isSubmerged;
+                }
             } else {
                 this.x = this.head.x;
                 this.y = this.head.y - this.index * WormSegment.SEGMENT_SPACING;
@@ -412,7 +412,7 @@ export class WormEnemy extends Enemy {
 
     public speedY: number = 1.8;
     public moveDirectionY: number = 1;
-    public timer: number = 0;
+    public override timer: number = 0;
     public angle: number = 0;
     public isSubmerged: boolean = false;
     public history: WormHistoryPoint[] = [];
@@ -538,7 +538,7 @@ export class WormEnemy extends Enemy {
         hp?: number,
         data: EnemySpawnData = {}
     ): WormEnemy {
-        const len = typeof data.length === 'number' ? data.length : WormEnemy.DEFAULT_LENGTH;
+        const len = typeof data['length'] === 'number' ? data['length'] : WormEnemy.DEFAULT_LENGTH;
         return new WormEnemy(game, bType, hp || 5, len);
     }
 }
@@ -552,9 +552,9 @@ export class WormEnemy extends Enemy {
  */
 export class BossEnemy_04 extends BossEnemy {
     public state: 'APPEAR' | 'PATROL_PATTERN' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
     public targetPointIndex: number = 0;
-    public points?: PatrolPoint[];
+    public points: [PatrolPoint, PatrolPoint, PatrolPoint];
 
     public override get imageName(): string { return "enemy_boss_04.webp"; }
 
@@ -571,15 +571,20 @@ export class BossEnemy_04 extends BossEnemy {
         this.height = 128;
         this.hitWidth = 100;
         this.hitHeight = 100;
+        this.points = this._createPatrolPoints();
     }
 
-    public override setStartPosition(x: number, y: number): void {
-        super.setStartPosition(x, y);
-        this.points = [
+    private _createPatrolPoints(): [PatrolPoint, PatrolPoint, PatrolPoint] {
+        return [
             { x: this.startX - 80, y: 50 },
             { x: this.startX + 80, y: 120 },
             { x: this.startX, y: 80 }
         ];
+    }
+
+    public override setStartPosition(x: number, y: number): void {
+        super.setStartPosition(x, y);
+        this.points = this._createPatrolPoints();
     }
 
     public override update(game: Stage4GameContext): void {
@@ -596,15 +601,9 @@ export class BossEnemy_04 extends BossEnemy {
                 break;
 
             case 'PATROL_PATTERN': {
-                if (!this.points) {
-                    this.points = [
-                        { x: this.startX - 80, y: 50 },
-                        { x: this.startX + 80, y: 120 },
-                        { x: this.startX, y: 80 }
-                    ];
-                }
-
                 const target = this.points[this.targetPointIndex];
+                if (!target) return;
+
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;
                 const dist = Math.hypot(dx, dy);
@@ -636,8 +635,8 @@ export class BossEnemy_04 extends BossEnemy {
         return new BossEnemy_04(
             game,
             hp || 800,
-            typeof data.timeLimit === 'number' ? data.timeLimit : undefined,
-            typeof data.timeMultiplier === 'number' ? data.timeMultiplier : undefined
+            typeof data['timeLimit'] === 'number' ? data['timeLimit'] : undefined,
+            typeof data['timeMultiplier'] === 'number' ? data['timeMultiplier'] : undefined
         );
     }
 }

@@ -11,6 +11,7 @@
 import { InputManager } from './systems/input.js';
 import { AudioManager } from './systems/audio.js';
 import { ConfigManager } from './config/config.js';
+import type { DifficultyLevel, ExtendOption, LivesOption } from './config/config.js';
 import { ReplayUIManager } from './systems/replay-ui.js';
 import { Game } from './game.js';
 
@@ -34,13 +35,14 @@ export interface GameInstanceLike {
         inputMode?: string;
     };
     missionConfig: {
-        missionName?: string;
+        missionName: string;
         difficulty: string;
-        extend?: number | string;
+        extend: string;
         lives: number;
-        cheatUsed?: boolean;
+        cheatUsed: boolean;
     };
     start(inputType: ControlInputType, stage?: number): void;
+    startReplay(replayData: any, stage: number): void;
     update(): void;
     draw(): void;
     destroy(): void;
@@ -49,9 +51,9 @@ export interface GameInstanceLike {
 /** ConfigManager の契約インターフェース（config.ts 移行時の設計指針） */
 export interface ConfigManagerLike {
     isMode: boolean;
-    lives: number;
-    difficulty: string;
-    extend: number | number[] | 'NONE';
+    lives: LivesOption;
+    difficulty: DifficultyLevel;
+    extend: ExtendOption;
     isInvincibleCheat: boolean;
     loadConfig(): void;
     open(): void;

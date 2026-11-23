@@ -37,7 +37,7 @@ export interface Stage7GameContext extends EnemyGameContext {
 export class CircuitWalkerEnemy extends Enemy {
     public vx: number = 0;
     public vy: number = 2.0;
-    public timer: number = 0;
+    public override timer: number = 0;
     public turnInterval: number = 60; // 60Fごとに直角ターン
 
     public override get imageName(): string { return "enemy_circuit_walker.webp"; }
@@ -82,8 +82,8 @@ export class CircuitWalkerEnemy extends Enemy {
 export class VoidBitEnemy extends Enemy {
     public angle: number = 0;
     public radius: number = 120; // 自機からの周回半径
-    public timer: number = 0;
-    public baseShootInterval: number = 50;
+    public override timer: number = 0;
+    public override baseShootInterval: number = 50;
 
     public override get imageName(): string { return "enemy_void_bit.webp"; }
 
@@ -132,7 +132,7 @@ export class VoidBitEnemy extends Enemy {
  */
 export class GateKeeperEnemy extends Enemy {
     public speedX: number = 1.5;
-    public baseShootInterval: number = 30;
+    public override baseShootInterval: number = 30;
 
     public override get imageName(): string { return "enemy_gate_keeper.webp"; }
 
@@ -175,7 +175,7 @@ export class GateKeeperEnemy extends Enemy {
  */
 export class BossEnemy_07 extends BossEnemy {
     public state: 'APPEAR' | 'CORE_PHASE_1' | 'TRANSFORM' | 'FINAL_OVERLORD' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
     public formPhase: 1 | 2 = 1;
     public override isInvincible: boolean = false;
     public baseX?: number;

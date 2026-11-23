@@ -13,7 +13,7 @@ import { Game, type GameControllerLike } from '../game.js';
 
 export interface ReplayGameLike {
     destroy(): void;
-    startReplay?(replayData: ReplayRecord, stage: number): void;
+    startReplay(replayData: ReplayRecord, stage: number): void;
 }
 
 export interface ReplayUIControllerLike extends GameControllerLike {

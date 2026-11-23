@@ -10,7 +10,7 @@
 
 import { Entity, type GameContext } from './entities/base.js';
 import { Player, Bullet } from './entities/player.js';
-import { Enemy, EnemyBullet } from './entities/enemy.js';
+import { Enemy, EnemyBullet, type HitboxPartName } from './entities/enemy.js';
 import { ScoreText, Particle } from './entities/effects.js';
 
 export interface Hitbox {
@@ -18,14 +18,14 @@ export interface Hitbox {
     y: number;
     width: number;
     height: number;
-    multiplier?: number;
-    part?: string;
+    multiplier: number;
+    part: HitboxPartName;
 }
 
 export interface HitResult {
     hit: boolean;
     multiplier: number;
-    part?: string;
+    part?: HitboxPartName;
 }
 
 export interface CollidableRect {

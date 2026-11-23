@@ -25,6 +25,8 @@ import { Player, Bullet } from './entities/player.js';
 import { Enemy, EnemyBullet } from './entities/enemy.js';
 import { Particle } from './entities/effects.js';
 
+import type { DifficultyLevel, ExtendOption, LivesOption } from './config/config.js';
+
 export interface DifficultyParam {
     fireRate: number;
     bulletSpeed: number;
@@ -69,9 +71,9 @@ export interface GameControllerLike {
         playCriticalHit?: () => void;
     };
     config: {
-        lives: number;
-        difficulty: string;
-        extend: number | number[] | 'NONE';
+        lives: LivesOption;
+        difficulty: DifficultyLevel;
+        extend: ExtendOption;
         isInvincibleCheat: boolean;
     };
     showStartScreen(msg: string, isNew: boolean): void;
@@ -92,7 +94,7 @@ const GAME_CONFIG = {
         'NORMAL': { fireRate: 1.0, bulletSpeed: 0.9, wayBonus: 0 },
         'HARD': { fireRate: 1.3, bulletSpeed: 1.0, wayBonus: 1 },
         'VERY HARD': { fireRate: 1.6, bulletSpeed: 1.1, wayBonus: 2 }
-    } as Record<string, DifficultyParam>
+    } as Record<DifficultyLevel, DifficultyParam>
 } as const;
 
 /**
@@ -130,7 +132,7 @@ export class Game implements GameContext, GameInstanceLike {
     public stats!: GameStats & { score?: number };
     public isInvincibleCheat: boolean = false;
 
-    public extendThreshold: number | number[] | 'NONE' = 'NONE';
+    public extendThreshold: ExtendOption;
     public extendIndex: number = 0;
     public hasExtended: boolean = false;
 
@@ -188,6 +190,7 @@ export class Game implements GameContext, GameInstanceLike {
         this.replay = new ReplayManager();
 
         this.lives = controller.config.lives;
+        this.extendThreshold = this.sc.config.extend;
         this.reset();
     }
 
@@ -236,7 +239,7 @@ export class Game implements GameContext, GameInstanceLike {
         this.missionConfig = {
             missionName: this.sc.tag,
             difficulty: this.sc.config.difficulty,
-            extend: Array.isArray(this.sc.config.extend) ? this.sc.config.extend[0] : this.sc.config.extend,
+            extend: Array.isArray(this.sc.config.extend) ? this.sc.config.extend.join(',') : String(this.sc.config.extend ?? 'NONE'),
             lives: this.sc.config.lives,
             cheatUsed: this.sc.config.isInvincibleCheat
         };
@@ -642,7 +645,14 @@ export class Game implements GameContext, GameInstanceLike {
     public checkExtend(): void {
         if (this.extendThreshold === 'NONE' || !this.extendThreshold) return;
 
-        if (Array.isArray(this.extendThreshold)) {
+        if (typeof this.extendThreshold === 'number') {
+            if (!this.hasExtended && this.score >= this.extendThreshold) {
+                this.lives++;
+                this.hasExtended = true;
+                this.ui.triggerExtendBlink();
+            }
+        } else {
+            // ここは確実に readonly [number] | readonly [number, number] に絞り込まれる
             const currentIndex = this.extendIndex || 0;
             if (currentIndex >= this.extendThreshold.length) return;
 
@@ -653,10 +663,6 @@ export class Game implements GameContext, GameInstanceLike {
                 this.extendIndex = currentIndex + 1;
                 this.ui.triggerExtendBlink();
             }
-        } else if (!this.hasExtended && this.score >= this.extendThreshold) {
-            this.lives++;
-            this.hasExtended = true;
-            this.ui.triggerExtendBlink();
         }
     }
 
@@ -753,8 +759,7 @@ export class Game implements GameContext, GameInstanceLike {
         const bossEnemies: Enemy[] = [];
         const otherEntities: Entity[] = [];
 
-        for (let i = 0; i < this.entities.length; i++) {
-            const e = this.entities[i];
+        for (const e of this.entities) {
             if (e instanceof Bullet || e instanceof EnemyBullet) {
                 bullets.push(e);
             } else if (e instanceof Enemy) {

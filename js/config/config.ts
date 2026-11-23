@@ -1,11 +1,11 @@
 /*
- * PROJECT: VOID-CIRCUIT
+- PROJECT: VOID-CIRCUIT
  *
- * config.ts
- * 
- * Copyright (c) 2026 あに。部長 / Ryo Miura
- * Licensed under the MIT License (see LICENSE file)
- * Note: Included assets are the property of their respective owners.
+- config.ts
+- 
+- Copyright (c) 2026 あに。部長 / Ryo Miura
+- Licensed under the MIT License (see LICENSE file)
+- Note: Included assets are the property of their respective owners.
  */
 
 import {
@@ -16,13 +16,25 @@ import {
 } from './soundTest.js';
 import type { ConfigManagerLike } from '../controller.js';
 
-export type ExtendOption = number[] | 'NONE';
+export type ExtendOption = readonly [number] | readonly [number, number] | 'NONE';
 
-export interface ConfigOptionsMap {
-    difficulty: string[];
-    lives: number[];
-    extend: ExtendOption[];
-}
+export const CONFIG_OPTIONS = {
+    difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
+    lives: [1, 2, 3, 5],
+    extend: [
+        [150000, 500000],
+        [250000, 700000],
+        [350000],
+        'NONE'
+    ]
+} as const satisfies {
+    difficulty: readonly string[];
+    lives: readonly number[];
+    extend: readonly ExtendOption[];
+};
+
+export type DifficultyLevel = (typeof CONFIG_OPTIONS.difficulty)[number];
+export type LivesOption = (typeof CONFIG_OPTIONS.lives)[number];
 
 export interface ConfigAudioLike extends SoundTestAudioLike {
     seVolume?: number;
@@ -47,8 +59,18 @@ export interface ConfigControllerLike extends SoundTestControllerLike {
     visualEffectWarning?: () => void;
 }
 
+/** 配列内の選択肢を前後循環するヘルパー */
+function cycleOption<T>(opts: readonly [T, ...T[]], current: T, isRight: boolean): T {
+    const idx = opts.indexOf(current);
+    const safeIdx = idx === -1 ? 0 : idx;
+    const nextIdx = isRight
+        ? (safeIdx + 1) % opts.length
+        : (safeIdx - 1 + opts.length) % opts.length;
+    return opts[nextIdx] ?? opts[0];
+}
+
 /**
- * 設定画面（BIOS風）を管理するクラス
+- 設定画面（BIOS風）を管理するクラス
  */
 export class ConfigManager implements ConfigManagerLike {
     public sc: ConfigControllerLike;
@@ -58,19 +80,10 @@ export class ConfigManager implements ConfigManagerLike {
 
     public soundTest: SoundTestManager;
 
-    public readonly OPTIONS: ConfigOptionsMap = {
-        difficulty: ['EASY', 'NORMAL', 'HARD', 'VERY HARD'],
-        lives: [1, 2, 3, 5],
-        extend: [
-            [150000, 500000],
-            [250000, 700000],
-            [350000],
-            'NONE'
-        ]
-    };
+    public readonly OPTIONS = CONFIG_OPTIONS;
 
-    public difficulty: string;
-    public lives: number;
+    public difficulty: DifficultyLevel;
+    public lives: LivesOption;
     public extend: ExtendOption;
     public isInvincibleCheat: boolean = false;
 
@@ -162,20 +175,29 @@ export class ConfigManager implements ConfigManagerLike {
 
         if (visibleItems.length === 0) return;
 
-        let currentVisibleIdx = visibleItems.indexOf(this.items[this.currentIndex]);
+        const currentItem = this.items[this.currentIndex];
+        let currentVisibleIdx = currentItem ? visibleItems.indexOf(currentItem) : -1;
         if (currentVisibleIdx === -1) currentVisibleIdx = 0;
 
         switch (e.code) {
-            case 'ArrowUp':
+            case 'ArrowUp': {
                 currentVisibleIdx = (currentVisibleIdx - 1 + visibleItems.length) % visibleItems.length;
-                this.currentIndex = this.items.indexOf(visibleItems[currentVisibleIdx]);
-                this.updateSelection();
+                const nextVisible = visibleItems[currentVisibleIdx];
+                if (nextVisible) {
+                    this.currentIndex = this.items.indexOf(nextVisible);
+                    this.updateSelection();
+                }
                 break;
-            case 'ArrowDown':
+            }
+            case 'ArrowDown': {
                 currentVisibleIdx = (currentVisibleIdx + 1) % visibleItems.length;
-                this.currentIndex = this.items.indexOf(visibleItems[currentVisibleIdx]);
-                this.updateSelection();
+                const nextVisible = visibleItems[currentVisibleIdx];
+                if (nextVisible) {
+                    this.currentIndex = this.items.indexOf(nextVisible);
+                    this.updateSelection();
+                }
                 break;
+            }
             case 'ArrowLeft':
             case 'ArrowRight':
                 this.handleValueChange(e.code === 'ArrowRight');
@@ -194,20 +216,14 @@ export class ConfigManager implements ConfigManagerLike {
     public handleValueChange(isRight: boolean): void {
         const item = this.items[this.currentIndex];
         if (!item) return;
-        const setting = item.dataset.setting;
+        const setting = item.dataset['setting'];
 
         if (setting === 'difficulty') {
-            const opts = this.OPTIONS.difficulty;
-            const idx = opts.indexOf(this.difficulty);
-            this.difficulty = opts[isRight ? (idx + 1) % opts.length : (idx - 1 + opts.length) % opts.length];
+            this.difficulty = cycleOption(this.OPTIONS.difficulty, this.difficulty, isRight);
         } else if (setting === 'lives') {
-            const opts = this.OPTIONS.lives;
-            const idx = opts.indexOf(this.lives);
-            this.lives = opts[isRight ? (idx + 1) % opts.length : (idx - 1 + opts.length) % opts.length];
+            this.lives = cycleOption(this.OPTIONS.lives, this.lives, isRight);
         } else if (setting === 'extend') {
-            const opts = this.OPTIONS.extend;
-            const idx = opts.indexOf(this.extend);
-            this.extend = opts[isRight ? (idx + 1) % opts.length : (idx - 1 + opts.length) % opts.length];
+            this.extend = cycleOption(this.OPTIONS.extend, this.extend, isRight);
         } else if (setting === 'se_vol' && this.sc.audio) {
             let vol = this.sc.audio.seVolume ?? 0.8;
             vol = isRight ? vol + 0.1 : vol - 0.1;
@@ -245,7 +261,7 @@ export class ConfigManager implements ConfigManagerLike {
     public handleAction(): void {
         const item = this.items[this.currentIndex];
         if (!item) return;
-        const setting = item.dataset.setting;
+        const setting = item.dataset['setting'];
 
         if (setting === 'sound') this.soundTest.playSE();
         if (setting === 'bgm') this.toggleBGMAndTransform();
@@ -279,7 +295,7 @@ export class ConfigManager implements ConfigManagerLike {
 
     /** 描画（アイテム） */
     public refreshDisplay(item: HTMLElement): void {
-        const setting = item.dataset.setting;
+        const setting = item.dataset['setting'];
         const valEl = item.querySelector<HTMLElement>('.value');
         if (!valEl) return;
         const audio = this.sc.audio;
@@ -311,7 +327,7 @@ export class ConfigManager implements ConfigManagerLike {
                 if (this.extend.length === 1) {
                     const first = (this.extend[0] / 10000).toFixed(0) + '万';
                     displayVal = `${first} (1回)`;
-                } else if (this.extend.length >= 2) {
+                } else {
                     const first = (this.extend[0] / 10000).toFixed(0) + '万';
                     const second = (this.extend[1] / 10000).toFixed(0) + '万';
                     displayVal = `${first} / ${second}`;
@@ -370,7 +386,7 @@ export class ConfigManager implements ConfigManagerLike {
                     this.currentIndex = index;
                     this.updateSelection();
                 }
-                const setting = item.dataset.setting;
+                const setting = item.dataset['setting'];
                 const target = e.target as HTMLElement | null;
                 const isLeftArrow = target?.classList.contains('left-arrow') ?? false;
                 const isRightArrow = target?.classList.contains('right-arrow') ?? false;
@@ -443,7 +459,7 @@ export class ConfigManager implements ConfigManagerLike {
         this.resetConfirmed = false;
         this.items.forEach((item) => {
             item.classList.remove('danger');
-            if (item.dataset.setting === 'reset_score') {
+            if (item.dataset['setting'] === 'reset_score') {
                 const valEl = item.querySelector<HTMLElement>('.value');
                 if (valEl) valEl.innerText = 'EXECUTE';
             }
@@ -501,26 +517,22 @@ export class ConfigManager implements ConfigManagerLike {
         if (!saved) return;
         try {
             const data = JSON.parse(saved) as Partial<{
-                difficulty: string;
-                lives: number;
+                difficulty: DifficultyLevel;
+                lives: LivesOption;
                 extend: ExtendOption;
             }>;
 
-            this.difficulty =
-                typeof data.difficulty === 'string' && this.OPTIONS.difficulty.includes(data.difficulty)
-                    ? data.difficulty
-                    : this.OPTIONS.difficulty[1];
+            const matchedDifficulty = this.OPTIONS.difficulty.find((d) => d === data.difficulty);
+            this.difficulty = matchedDifficulty ?? this.OPTIONS.difficulty[1];
 
-            this.lives =
-                typeof data.lives === 'number' && this.OPTIONS.lives.includes(data.lives)
-                    ? data.lives
-                    : this.OPTIONS.lives[2];
+            const matchedLives = this.OPTIONS.lives.find((l) => l === data.lives);
+            this.lives = matchedLives ?? this.OPTIONS.lives[2];
 
             // 配列比較を含むためJSON文字列一致でオプション定義のインスタンスを復元
             const matchedExtend = this.OPTIONS.extend.find(
                 (opt) => JSON.stringify(opt) === JSON.stringify(data.extend)
             );
-            this.extend = matchedExtend !== undefined ? matchedExtend : this.OPTIONS.extend[1];
+            this.extend = matchedExtend ?? this.OPTIONS.extend[1];
 
             this.refreshAllDisplay();
         } catch (e) {
@@ -531,7 +543,7 @@ export class ConfigManager implements ConfigManagerLike {
     public startLoop(): void {
         if (!this.isMode || !this.eqCtx) return;
         const currentItem = this.items[this.currentIndex];
-        const currentSetting = currentItem ? currentItem.dataset.setting : '';
+        const currentSetting = currentItem ? currentItem.dataset['setting'] : '';
         this.soundTest.drawEqualizer(this.eqCtx, 0, 0, currentSetting);
         this.loopId = requestAnimationFrame(() => this.startLoop());
     }

@@ -11,13 +11,10 @@
 import jsyaml from 'js-yaml';
 import {
     createEnemyInstance,
-    Enemy,
-    type EnemyGameContext,
-    type EnemySpawnData
+    type EnemyGameContext
 } from '../entities/enemy.js';
 import { WarningEffect } from '../entities/effects.js';
 import type { AudioManager } from './audio.js';
-import type { Random } from './random.js';
 
 export type SpawnDirection = 'top' | 'bottom' | 'left' | 'right';
 
@@ -228,7 +225,6 @@ export class ScenarioManager {
 
             // 5. HP & 弾丸タイプの補正
             data.hp = (typeof data.hp === 'number' && data.hp > 0) ? data.hp : 1;
-            data.bulletType = data.bulletType;
 
             // 6. ボスパラメータの事前補正
             if (data.type.includes('boss')) {
@@ -357,11 +353,11 @@ export class ScenarioManager {
 
         this.currentScenarioFrame++;
 
-        while (
-            this.currentIndex < this._scenario.length &&
-            this._scenario[this.currentIndex].frame <= this.currentScenarioFrame
-        ) {
+        while (true) {
             const data = this._scenario[this.currentIndex];
+            if (!data || data.frame > this.currentScenarioFrame) {
+                break;
+            }
             console.log(data);
 
             if (data.type === 'LOOP_END') {
@@ -387,7 +383,11 @@ export class ScenarioManager {
 
     private _findStartIndexForFrame(targetFrame: number): number {
         let index = 0;
-        while (index < this._scenario.length && this._scenario[index].frame < targetFrame) {
+        while (true) {
+            const item = this._scenario[index];
+            if (!item || item.frame >= targetFrame) {
+                break;
+            }
             index++;
         }
         return index;
@@ -395,9 +395,12 @@ export class ScenarioManager {
 
     public skipToAfterLoop(): void {
         for (let i = this.currentIndex; i < this._scenario.length; i++) {
-            if (this._scenario[i].type === 'LOOP_END') {
+            const item = this._scenario[i];
+            if (!item) continue;
+
+            if (item.type === 'LOOP_END') {
                 this.currentIndex = i + 1;
-                this.currentScenarioFrame = this._scenario[i].frame;
+                this.currentScenarioFrame = item.frame;
                 return;
             }
         }

@@ -21,8 +21,8 @@ export class InputManager {
     public ignoreElementId: string;
 
     public keys: Set<string>;
-    public touchX: number | null;
-    public touchY: number | null;
+    public touchX: number;
+    public touchY: number;
     public isTouching: boolean;
     public isRightMouseDown: boolean;     // 右クリック長押し判定用
     public rightClickTriggered: boolean;  // 右クリック単発トリガー用
@@ -43,8 +43,8 @@ export class InputManager {
         this.ignoreElementId = options.ignoreElement || 'start-screen';
 
         this.keys = new Set<string>();
-        this.touchX = null;
-        this.touchY = null;
+        this.touchX = 0;
+        this.touchY = 0;
         this.isTouching = false;
         this.isRightMouseDown = false;
         this.rightClickTriggered = false;
@@ -140,26 +140,24 @@ export class InputManager {
                 const now = Date.now();
                 const timeDiff = now - this.lastTapTime;
 
-                if (this.touchX !== null && this.touchY !== null) {
-                    if (timeDiff < this.doubleTapDelay) {
-                        // ② 1回目と2回目のタップ位置の距離（論理ピクセル）を計算
-                        const dx = this.touchX - this.lastTapX;
-                        const dy = this.touchY - this.lastTapY;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
+                if (timeDiff < this.doubleTapDelay) {
+                    // ② 1回目と2回目のタップ位置の距離（論理ピクセル）を計算
+                    const dx = this.touchX - this.lastTapX;
+                    const dy = this.touchY - this.lastTapY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
-                        if (dist <= this.doubleTapMaxDistance) {
-                            this.doubleTapTriggered = true;
-                            this.lastTapTime = 0; // 連続判定防止のリセット
-                        } else {
-                            this.lastTapTime = now;
-                            this.lastTapX = this.touchX;
-                            this.lastTapY = this.touchY;
-                        }
+                    if (dist <= this.doubleTapMaxDistance) {
+                        this.doubleTapTriggered = true;
+                        this.lastTapTime = 0; // 連続判定防止のリセット
                     } else {
                         this.lastTapTime = now;
                         this.lastTapX = this.touchX;
                         this.lastTapY = this.touchY;
                     }
+                } else {
+                    this.lastTapTime = now;
+                    this.lastTapX = this.touchX;
+                    this.lastTapY = this.touchY;
                 }
 
                 if (e.cancelable) e.preventDefault();
@@ -222,8 +220,10 @@ export class InputManager {
         let clientY: number;
 
         if ('touches' in e && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
+            const touch = e.touches[0];
+            if (!touch) return;
+            clientX = touch.clientX;
+            clientY = touch.clientY;
         } else if ('clientX' in e) {
             clientX = e.clientX;
             clientY = e.clientY;
@@ -232,6 +232,7 @@ export class InputManager {
         }
 
         // 論理サイズと実表示サイズの比率を計算
+        if (rect.width === 0 || rect.height === 0) return;
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
 
@@ -247,8 +248,6 @@ export class InputManager {
     public destroy(): void {
         this._abortController.abort();
         this.keys.clear();
-        this.touchX = null;
-        this.touchY = null;
         this.isTouching = false;
         this.isRightMouseDown = false;
         this.rightClickTriggered = false;

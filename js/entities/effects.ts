@@ -35,7 +35,7 @@ export class Particle extends Entity {
         this.size = (type === 'player') ? Math.random() * 4 + 2 : 2;
     }
 
-    public update(): void {
+    public override update(): void {
         this.x += this.vx;
         this.y += this.vy;
         if (this.type === 'player') {
@@ -50,7 +50,7 @@ export class Particle extends Entity {
     }
 
     /** パーティクルを描画する */
-    public draw(ctx: CanvasRenderingContext2D): void {
+    public override draw(ctx: CanvasRenderingContext2D): void {
         const ratio = this.life / this.maxLife;
         ctx.save();
 
@@ -148,7 +148,7 @@ export class ScoreText extends Entity {
         this.isBig = (displayType === "BONUS" || displayType === "BOSS_KILLED");
     }
 
-    public update(): void {
+    public override update(): void {
         this.y -= this.speed;
         this.life--;
         this.opacity = Math.max(0, this.life / this.maxLife);
@@ -158,7 +158,7 @@ export class ScoreText extends Entity {
         }
     }
 
-    public draw(ctx: CanvasRenderingContext2D): void {
+    public override draw(ctx: CanvasRenderingContext2D): void {
         ctx.save();
         ctx.globalAlpha = this.opacity;
 
@@ -202,7 +202,7 @@ export class WarningEffect extends Entity {
     /**
      * フレーム更新処理
      */
-    public update(game: GameContext): void {
+    public override update(game: GameContext): void {
         super.update(game);
 
         // 初回フレームでサイレンSEを再生
@@ -221,7 +221,7 @@ export class WarningEffect extends Entity {
     /**
      * 描画処理
      */
-    public draw(ctx: CanvasRenderingContext2D): void {
+    public override draw(ctx: CanvasRenderingContext2D): void {
         if (!this.active) return;
 
         const width = ctx.canvas.width;

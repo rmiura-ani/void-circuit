@@ -9,7 +9,7 @@
  */
 
 import { Entity, type BoundsContext, type GameContext } from './base.js';
-import type { Hitbox, EnemyLike } from '../game-collision.js';
+import type { EnemyLike } from '../game-collision.js';
 
 export type BulletType =
     | 'none'
@@ -62,13 +62,15 @@ export interface EnemyConstructor {
     create(game: EnemyGameContext, bType?: BulletType, hp?: number, data?: EnemySpawnData): Enemy;
 }
 
+export type HitboxPartName = 'HEAD' | 'BODY' | 'CORE' | 'ARM' | (string & {});
+
 export interface BossHitboxPart {
-    part: string;
-    multiplier: number;
     x: number;
     y: number;
     width: number;
     height: number;
+    multiplier: number;
+    part: HitboxPartName;
 }
 
 
@@ -491,10 +493,10 @@ export class Enemy extends Entity implements EnemyLike {
         game.collisions?.createExplosion(this.x + this.width / 2, this.y + this.height / 2, this, soundoff);
     }
 
-    public getHitboxes(): Array<{ part: string; multiplier: number; x: number; y: number; width: number; height: number }> | null {
-        return null;
+    public getHitboxes(): BossHitboxPart[] {
+        return [];
     }
-
+    
     public static create(
         game: EnemyGameContext,
         bType?: BulletType,

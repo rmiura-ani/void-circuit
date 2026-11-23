@@ -83,8 +83,8 @@ export class CellMiniEnemy extends Enemy {
         data: EnemySpawnData = {}
     ): CellMiniEnemy {
         const enemy = new CellMiniEnemy(game, bType, hp || 1);
-        if (typeof data.vx === 'number') enemy.vx = data.vx;
-        if (typeof data.vy === 'number') enemy.vy = data.vy;
+        if (typeof data['vx'] === 'number') enemy.vx = data['vx'];
+        if (typeof data['vy'] === 'number') enemy.vy = data['vy'];
         return enemy;
     }
 }
@@ -148,7 +148,7 @@ export class CellMitosisEnemy extends Enemy {
  */
 export class PulseSporeEnemy extends Enemy {
     public speedY: number = 0.8;
-    public timer: number = 0;
+    public override timer: number = 0;
     public scale: number = 1.0;
     public hasPulsed: boolean = false;
 
@@ -202,9 +202,9 @@ export class PulseSporeEnemy extends Enemy {
  */
 export class BioTentacleEnemy extends Enemy {
     public speedY: number = 1.0;
-    public timer: number = 0;
+    public override timer: number = 0;
     public baseX?: number;
-    public baseShootInterval: number = 60;
+    public override baseShootInterval: number = 60;
 
     public override get imageName(): string { return "enemy_bio_tentacle.webp"; }
 
@@ -245,7 +245,7 @@ export class BioTentacleEnemy extends Enemy {
  * 4. LeechParasite: 自機に向かって超低速で寄生飛行。
  */
 export class LeechParasiteEnemy extends Enemy {
-    public speed: number = 1.2;
+    public override speed: number = 1.2;
     public isParasite: boolean = true;
 
     public override get imageName(): string { return "enemy_leech_parasite.webp"; }
@@ -287,8 +287,8 @@ export class LeechParasiteEnemy extends Enemy {
  */
 export class HeartNucleusEnemy extends Enemy {
     public speedY: number = 0.4;
-    public timer: number = 0;
-    public baseShootInterval: number = 80;
+    public override timer: number = 0;
+    public override baseShootInterval: number = 80;
     public suctionParticles: SuctionParticle[] = [];
     public healPulses: HealPulse[] = [];
 
@@ -356,6 +356,7 @@ export class HeartNucleusEnemy extends Enemy {
         // 回復パルスの更新処理
         for (let i = this.healPulses.length - 1; i >= 0; i--) {
             const pulse = this.healPulses[i];
+            if (!pulse) continue;
             pulse.radius += pulse.speed;
             pulse.alpha = 1 - pulse.radius / pulse.maxRadius;
 
@@ -447,7 +448,7 @@ export class HeartNucleusEnemy extends Enemy {
  */
 export class BossEnemy_05 extends BossEnemy {
     public state: 'APPEAR' | 'PULSE_WAVE' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
     public hasSplit: boolean = false;
     public shotCount: number = 0;
     public baseX?: number;

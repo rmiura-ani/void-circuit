@@ -97,7 +97,7 @@ export class OrbitInterceptorEnemy extends Enemy {
  */
 export class HeatArmorEnemy extends Enemy {
     public speedY: number = 0.6;
-    public baseShootInterval: number = 70;
+    public override baseShootInterval: number = 70;
 
     public override get imageName(): string { return "enemy_heat_armor.webp"; }
 
@@ -139,7 +139,7 @@ export class HeatArmorEnemy extends Enemy {
  */
 export class HomingPodEnemy extends Enemy {
     public speedY: number = 0.8;
-    public baseShootInterval: number = 80;
+    public override baseShootInterval: number = 80;
 
     public override get imageName(): string { return "enemy_homing_pod.webp"; }
 
@@ -169,7 +169,7 @@ export class HomingPodEnemy extends Enemy {
  */
 export class BeamCruiserEnemy extends Enemy {
     public speedY: number = 0.4;
-    public baseShootInterval: number = 40;
+    public override baseShootInterval: number = 40;
 
     public override get imageName(): string { return "enemy_beam_cruiser.webp"; }
 
@@ -201,7 +201,7 @@ export class BeamCruiserEnemy extends Enemy {
  */
 export class BurnerDroneEnemy extends Enemy {
     public speedY: number = -1.8;
-    public baseShootInterval: number = 20;
+    public override baseShootInterval: number = 20;
     public baseX?: number;
 
     public override get imageName(): string { return "enemy_burner_drone.webp"; }
@@ -245,7 +245,7 @@ export class BurnerDroneEnemy extends Enemy {
  */
 export class BossEnemy_06 extends BossEnemy {
     public state: 'APPEAR' | 'HEAVY_BOMBARD' | 'OVERDRIVE' = 'APPEAR';
-    public timer: number = 0;
+    public override timer: number = 0;
     public baseX?: number;
 
     public override get imageName(): string { return "enemy_boss_06.webp"; }
